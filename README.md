@@ -9,6 +9,8 @@ Aplikacja podobna do bid.cars: frontend (Next.js) + backend (NestJS) + infra (Po
 - Git (np. GitHub Desktop)
 
 ## 📁 Struktura
+
+```text
 .
 ├─ apps/
 │  ├─ web/   # Next.js (Frontend, port 3000)
@@ -18,6 +20,7 @@ Aplikacja podobna do bid.cars: frontend (Next.js) + backend (NestJS) + infra (Po
 ├─ pnpm-workspace.yaml
 ├─ package.json (skrypty workspace)
 └─ README.md
+```
 
 ## 🚀 Szybki start (dev)
 
