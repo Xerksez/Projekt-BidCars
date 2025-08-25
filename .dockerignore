@@ -1,0 +1,31 @@
+# Ignoruj pliki niepotrzebne w obrazie Dockera
+node_modules
+npm-debug.log
+pnpm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Build outputs
+apps/web/.next
+apps/web/out
+apps/web/.vercel
+apps/api/dist
+
+# Env files
+.env
+.env.*
+apps/api/.env
+apps/api/.env.*
+
+# Git / IDE
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docker compose / lokalne volume
+docker-compose.yml
+docker-data

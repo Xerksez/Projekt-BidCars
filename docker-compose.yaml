@@ -1,0 +1,63 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: bidcars-postgres
+    environment:
+      POSTGRES_USER: bidcars
+      POSTGRES_PASSWORD: bidcars
+      POSTGRES_DB: bidcars
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bidcars"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: bidcars-redis
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: bidcars-rabbit
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # panel: http://localhost:15672 (guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    container_name: bidcars-opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"  # API
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2
+    container_name: bidcars-dashboards
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      OPENSEARCH_SSL_VERIFICATIONMODE: none
+      SERVER_HOST: "0.0.0.0"
+    depends_on:
+      - opensearch
+    ports:
+      - "5601:5601"  # UI: http://localhost:5601
+
+volumes:
+  pgdata:

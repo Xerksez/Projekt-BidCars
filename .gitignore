@@ -1,0 +1,43 @@
+# Node / pnpm
+node_modules/
+.pnpm-store/
+.pnp.*
+.npmrc
+
+# Build outputs
+apps/web/.next/
+apps/web/out/
+apps/web/.vercel/
+apps/api/dist/
+apps/api/.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+apps/api/.env
+apps/api/.env.*
+!apps/api/.env.example
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-data/
+*.pid
+
+# Prisma
+prisma/.db/
+prisma/migrations/*/steps.json
