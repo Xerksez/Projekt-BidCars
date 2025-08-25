@@ -1,16 +1,16 @@
 import Image from "next/image";
 
-async function getHealth() {
-  const res = await fetch("http://localhost:3001/health", { cache: "no-store" });
+async function getAuctions() {
+  const res = await fetch("http://localhost:3001/auctions", { cache: "no-store" });
   return res.json();
 }
 
 export default async function Home() {
-  const health = await getHealth();
+  const auctions = await getAuctions();
 
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
+      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start w-full max-w-3xl">
         <Image
           className="dark:invert"
           src="/next.svg"
@@ -20,12 +20,24 @@ export default async function Home() {
           priority
         />
 
-        {/* 🔥 tu pojawia się wynik z NestJS API */}
-        <div className="rounded bg-gray-100 dark:bg-gray-800 p-4 w-full max-w-md">
-          <h2 className="text-lg font-semibold mb-2">API health check</h2>
-          <pre className="text-sm whitespace-pre-wrap">
-            {JSON.stringify(health, null, 2)}
-          </pre>
+        <h2 className="text-xl font-semibold">Aukcje (z API)</h2>
+        <div className="w-full rounded border p-4">
+          {auctions.length === 0 ? (
+            <p className="text-sm opacity-70">Brak aukcji. Dodaj pierwszą przez POST /auctions.</p>
+          ) : (
+            <ul className="space-y-2">
+              {auctions.map((a: any) => (
+                <li key={a.id} className="border rounded p-3">
+                  <div className="font-medium">{a.title}</div>
+                  <div className="text-xs opacity-70">VIN: {a.vin ?? '—'}</div>
+                  <div className="text-xs opacity-70">
+                    {new Date(a.startsAt).toLocaleString()} → {new Date(a.endsAt).toLocaleString()}
+                  </div>
+                  <div className="text-sm mt-1">Cena bieżąca: ${a.currentPrice}</div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
@@ -38,32 +50,6 @@ export default async function Home() {
           </li>
           <li className="tracking-[-.01em]">Save and see your changes instantly.</li>
         </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
         <a
