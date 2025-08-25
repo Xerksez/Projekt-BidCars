@@ -1,0 +1,54 @@
+// apps/api/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bids      Bid[]
+}
+
+model Auction {
+  id           String         @id @default(cuid())
+  title        String
+  vin          String?        @unique
+  startsAt     DateTime
+  endsAt       DateTime
+  softCloseSec Int            @default(120)
+  currentPrice Int            @default(0)
+  status       AuctionStatus  @default(SCHEDULED)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  bids         Bid[]
+}
+
+model Bid {
+  id         String   @id @default(cuid())
+  amount     Int
+  createdAt  DateTime @default(now())
+  userId     String
+  auctionId  String
+
+  user       User    @relation(fields: [userId], references: [id])
+  auction    Auction @relation(fields: [auctionId], references: [id])
+
+  @@index([auctionId, createdAt])
+}
+
+enum AuctionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
