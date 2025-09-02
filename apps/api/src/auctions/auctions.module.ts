@@ -1,10 +1,17 @@
-// apps/api/src/auctions/auctions.module.ts
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuctionsService } from './auctions.service';
 import { AuctionsController } from './auctions.controller';
+import { BidsModule } from '../bids/bids.module';
+import { RealtimeModule } from '../realtime/realtime.module';
+import { AuctionsStatusService } from './auctions-status.service';
 
 @Module({
+  imports: [
+    forwardRef(() => BidsModule), 
+    RealtimeModule,               
+  ],
+  providers: [AuctionsService, AuctionsStatusService],
   controllers: [AuctionsController],
-  providers: [AuctionsService],
+  exports: [AuctionsService],
 })
 export class AuctionsModule {}

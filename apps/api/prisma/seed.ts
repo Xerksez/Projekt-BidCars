@@ -29,7 +29,18 @@ async function main() {
     ],
     skipDuplicates: true,
   });
+
+  await prisma.user.createMany({
+  data: [
+    { email: 'anna@example.com', name: 'Anna Kowalska' },
+    { email: 'piotr@example.com', name: 'Piotr Nowak' },
+    { email: 'ola@example.com', name: 'Aleksandra Zielińska' },
+  ],
+  skipDuplicates: true,
+});
+
 }
+
 
 main()
   .then(() => {

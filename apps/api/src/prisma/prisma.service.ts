@@ -7,6 +7,7 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  photo: any;
   async onModuleInit() {
     await this.$connect();
   }

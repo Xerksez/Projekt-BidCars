@@ -2,22 +2,63 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { UpdateAuctionDto } from './dto/update-auction.dto';
+import type { ListAuctionsDto } from './dto/list-auctions.dto';
+
+type AuctionStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
+
+function computeStatus(a: {
+  startsAt: Date | string;
+  endsAt: Date | string;
+  status?: AuctionStatus;
+}): AuctionStatus {
+  if (a.status === 'CANCELLED') return 'CANCELLED';
+  const now = Date.now();
+  const starts = new Date(a.startsAt).getTime();
+  const ends = new Date(a.endsAt).getTime();
+  if (now < starts) return 'SCHEDULED';
+  if (now >= ends) return 'ENDED';
+  return 'LIVE';
+}
 
 @Injectable()
 export class AuctionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list() {
-    return this.prisma.auction.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+  async list(q?: ListAuctionsDto) {
+    const page = Math.max(1, q?.page ?? 1);
+    const limit = Math.min(50, Math.max(1, q?.limit ?? 10));
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AuctionWhereInput = {};
+    if (q?.status) {
+      where.status = q.status as AuctionStatus;
+    }
+
+    const sortField = (q?.sort ??
+      'endsAt') as keyof Prisma.AuctionOrderByWithRelationInput;
+    const sortOrder = (q?.order ?? 'asc') as Prisma.SortOrder;
+    const orderBy: Prisma.AuctionOrderByWithRelationInput = {
+      [sortField]: sortOrder,
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.auction.findMany({ where, orderBy, skip, take: limit }),
+      this.prisma.auction.count({ where }),
+    ]);
+    return {
+      items: items.map((a) => ({ ...a, status: computeStatus(a) })), // <— tu
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(id: string) {
     const auction = await this.prisma.auction.findUnique({ where: { id } });
     if (!auction) throw new NotFoundException('Auction not found');
-    return auction;
+    return { ...auction, status: computeStatus(auction) }; // <— tu
   }
 
   create(input: {
@@ -58,32 +99,16 @@ export class AuctionsService {
       });
   }
 
-  async update(
-    id: string,
-    input: Partial<{
-      title: string;
-      vin?: string | null;
-      startsAt: string;
-      endsAt: string;
-      currentPrice?: number;
-      softCloseSec?: number;
-    }>,
-  ) {
-    // poprawne typowanie zamiast any
+  async update(id: string, input: UpdateAuctionDto) {
     const data: Record<string, unknown> = { ...input };
 
-    if (data.startsAt && typeof data.startsAt === 'string') {
-      data.startsAt = new Date(data.startsAt);
-    }
-    if (data.endsAt && typeof data.endsAt === 'string') {
-      data.endsAt = new Date(data.endsAt);
-    }
+    if (typeof data.startsAt === 'string')
+      data.startsAt = new Date(data.startsAt as string);
+    if (typeof data.endsAt === 'string')
+      data.endsAt = new Date(data.endsAt as string);
 
     try {
-      return await this.prisma.auction.update({
-        where: { id },
-        data,
-      });
+      return await this.prisma.auction.update({ where: { id }, data });
     } catch {
       throw new NotFoundException('Auction not found');
     }

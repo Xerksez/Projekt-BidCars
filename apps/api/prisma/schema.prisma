@@ -30,21 +30,48 @@ model Auction {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
+  // NEW: pochodzenie danych
+  source        String    @default("MANUAL") // np. MANUAL | MOCK | COPART | IAAI
+  sourceId      String?                // id rekordu u dostawcy
+  sourceUrl     String?                // deep link do aukcji u dostawcy
+  raw           Json?                  // surowy payload od dostawcy (na debug)
+
+
+photos       AuctionPhoto[]   
+
   bids         Bid[]
+  @@index([status])
+  @@index([endsAt])
+  @@unique([source, sourceId], name: "source_sourceId")
+}
+
+model AuctionPhoto {
+  id        String   @id @default(cuid())
+  auctionId String
+  url       String   // np. /uploads/abc.jpg
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  auction   Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  @@index([auctionId, sort])
+  @@unique([auctionId, url], map: "auctionId_url")
 }
 
 model Bid {
-  id         String   @id @default(cuid())
-  amount     Int
-  createdAt  DateTime @default(now())
-  userId     String
-  auctionId  String
+  id        String   @id @default(cuid())
+  amount    Int
+  createdAt DateTime @default(now())
 
-  user       User    @relation(fields: [userId], references: [id])
-  auction    Auction @relation(fields: [auctionId], references: [id])
+  userId    String
+  auctionId String
+
+  user      User    @relation(fields: [userId], references: [id])
+  auction   Auction @relation(fields: [auctionId], references: [id])
 
   @@index([auctionId, createdAt])
 }
+
 
 enum AuctionStatus {
   SCHEDULED
