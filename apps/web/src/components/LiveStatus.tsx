@@ -4,30 +4,38 @@ import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Countdown from './Countdown';
 
+type BackendStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED' | undefined;
+
 type Props = {
   startsAt: string; // ISO
   endsAt: string;   // ISO
-  status?: string;  // opcjonalnie, jeśli chcesz to wyświetlać obok
+  status?: BackendStatus;
 };
 
 export default function LiveStatus({ startsAt, endsAt, status }: Props) {
   const router = useRouter();
 
-  // Kolory badge wg fazy wyliczone po stronie klienta
-  const phase = useMemo(() => {
+  // Klient liczy fazę po czasie
+  const clientPhase: 'SCHEDULED' | 'LIVE' | 'ENDED' = useMemo(() => {
     const now = Date.now();
     const s = new Date(startsAt).getTime();
     const e = new Date(endsAt).getTime();
-    if (now < s) return 'UPCOMING';
+    if (now < s) return 'SCHEDULED';
     if (now >= e) return 'ENDED';
     return 'LIVE';
   }, [startsAt, endsAt]);
 
+  // CANCELLED z backendu zawsze wygrywa
+  const phase: 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED' =
+    status === 'CANCELLED' ? 'CANCELLED' : clientPhase;
+
   const badgeClass =
     phase === 'LIVE'
       ? 'bg-green-100 text-green-700 border-green-300'
-      : phase === 'UPCOMING'
+      : phase === 'SCHEDULED'
       ? 'bg-amber-100 text-amber-700 border-amber-300'
+      : phase === 'CANCELLED'
+      ? 'bg-red-100 text-red-700 border-red-300 line-through'
       : 'bg-gray-200 text-gray-700 border-gray-300';
 
   return (
@@ -36,21 +44,19 @@ export default function LiveStatus({ startsAt, endsAt, status }: Props) {
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${badgeClass}`}>
           {phase}
         </span>
-        {status && (
-          <span className="text-xs opacity-70">
-            ({status})
-          </span>
-        )}
       </div>
 
-      <Countdown
-        startsAt={startsAt}
-        endsAt={endsAt}
-        onPhaseChange={(p) => {
-          // Auto-refresh gdy przejście UPCOMING→LIVE i LIVE→ENDED
-          if (p === 'LIVE' || p === 'ENDED') router.refresh();
-        }}
-      />
+      {/* Odliczanie tylko gdy NIE jest anulowana */}
+      {phase !== 'CANCELLED' && (
+        <Countdown
+          startsAt={startsAt}
+          endsAt={endsAt}
+          onPhaseChange={(p) => {
+            // Auto-refresh przy wejściu w LIVE i przy końcu
+            if (p === 'LIVE' || p === 'ENDED') router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

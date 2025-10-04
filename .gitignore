@@ -41,3 +41,5 @@ docker-data/
 # Prisma
 prisma/.db/
 prisma/migrations/*/steps.json
+
+uploads/

@@ -37,12 +37,15 @@ model Auction {
   raw           Json?                  // surowy payload od dostawcy (na debug)
 
 
-photos       AuctionPhoto[]   
+  photos       AuctionPhoto[]   
 
   bids         Bid[]
   @@index([status])
   @@index([endsAt])
+  @@index([endsAt, status(sort: Asc)])
   @@unique([source, sourceId], name: "source_sourceId")
+  @@index([title])
+  @@index([vin])
 }
 
 model AuctionPhoto {

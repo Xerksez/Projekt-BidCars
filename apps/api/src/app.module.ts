@@ -8,7 +8,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PhotosModule } from './photos/photos.module';
 import { ImportController } from './import/import.controller';
 import { AuctionsImportService } from './import/auctions-import.service';
-import { VendorModule } from './vendor/vendor.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+//import { VendorModule } from './vendor/vendor.module';
 
 @Module({
   imports: [
@@ -18,7 +19,8 @@ import { VendorModule } from './vendor/vendor.module';
     UsersModule,
     BidsModule,
     PhotosModule,
-    VendorModule,
+    ThrottlerModule.forRoot([ { ttl: 60_000, limit: 100 } ]),
+    //VendorModule,
   ],
   controllers: [AppController, ImportController],
   providers: [AuctionsImportService],

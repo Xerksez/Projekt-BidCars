@@ -1,4 +1,3 @@
-// apps/web/src/app/auction/[id]/page.tsx
 import Link from "next/link";
 import BidForm from "@/components/BidForm";
 import BidStream from "@/components/BidStream";
@@ -87,16 +86,23 @@ export default async function AuctionPage({
   );
 }
 
+type Phase = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
+
 function AuctionView({
   auction, bidsOk, bids, usersOk, users, photos,
 }: {
   auction: any; bidsOk: boolean; bids: any[]; usersOk: boolean; users: any[]; photos: any[];
 }) {
+  // Preferujemy status z backendu (computeStatus), a jak go brak – fallback na czas
   const now = Date.now();
   const startsAtMs = new Date(auction.startsAt).getTime();
   const endsAtMs = new Date(auction.endsAt).getTime();
-  const isLive = now >= startsAtMs && now < endsAtMs;
-  const isEnded = now >= endsAtMs;
+  const phaseFromTime: Exclude<Phase, 'CANCELLED'> =
+    now < startsAtMs ? 'SCHEDULED' : (now >= endsAtMs ? 'ENDED' : 'LIVE');
+  const phase: Phase = (auction?.status as Phase | undefined) ?? phaseFromTime;
+
+  const isLive = phase === 'LIVE';
+  const isEnded = phase === 'ENDED';
 
   const minAmount = Number(auction?.currentPrice ?? 0) + 100;
 
@@ -159,7 +165,12 @@ function AuctionView({
         <h2 className="font-semibold mb-3">Złóż ofertę</h2>
         {isLive ? (
           usersOk && users.length > 0 ? (
-            <BidForm auctionId={auction.id} minAmount={minAmount} users={users} />
+            <BidForm
+              auctionId={auction.id}
+              minAmount={minAmount}
+              users={users}
+              disabled={!isLive}
+            />
           ) : (
             <p className="text-sm opacity-70">Brak użytkowników. Dodaj przez POST /users.</p>
           )

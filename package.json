@@ -1,16 +1,21 @@
 {
-    "name": "bidcars",
-    "private": true,
-    "workspaces": [
-        "apps/*",
-        "packages/*"
-    ],
-    "scripts": {
-        "dev:web": "pnpm --filter web dev",
-        "dev:api": "pnpm --filter api start:dev",
-        "dev": "concurrently -n WEB,API -c blue,green \"pnpm dev:web\" \"pnpm dev:api\""
-    },
-    "devDependencies": {
-        "concurrently": "^9.2.1"
-    }
+  "name": "bidcars",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "dev": "concurrently -n WEB,API -c blue,green \"pnpm dev:web\" \"pnpm dev:api\"",
+    "lint": "pnpm -r eslint .",
+    "fix": "pnpm -r eslint . --fix",
+    "format": "prettier --write .",
+     "build:all": "pnpm -r build",
+    "db:reset": "pnpm --filter api dlx prisma migrate reset -f && pnpm --filter api dlx prisma db seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }

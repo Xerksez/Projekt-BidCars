@@ -1,6 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { UpdateAuctionDto } from './dto/update-auction.dto';
 import type { ListAuctionsDto } from './dto/list-auctions.dto';
@@ -30,10 +33,49 @@ export class AuctionsService {
     const limit = Math.min(50, Math.max(1, q?.limit ?? 10));
     const skip = (page - 1) * limit;
 
-    const where: Prisma.AuctionWhereInput = {};
-    if (q?.status) {
-      where.status = q.status as AuctionStatus;
+    const now = new Date();
+
+    // Budujemy warunki bez `any`
+    const and: Prisma.AuctionWhereInput[] = [];
+    const or: Prisma.AuctionWhereInput[] = [];
+
+    // Szukanie po tytule/VIN (case-insensitive)
+    if (q?.search) {
+      or.push({
+        title: { contains: q.search, mode: 'insensitive' },
+      });
+      or.push({
+        vin: { contains: q.search, mode: 'insensitive' },
+      });
     }
+
+    // Filtr statusu — po CZASIE (a nie po kolumnie),
+    // wyjątek: CANCELLED filtrujemy po kolumnie
+    switch (q?.status) {
+      case 'SCHEDULED':
+        and.push({ startsAt: { gt: now } }, { status: { not: 'CANCELLED' } });
+        break;
+      case 'LIVE':
+        and.push(
+          { startsAt: { lte: now } },
+          { endsAt: { gt: now } },
+          { status: { not: 'CANCELLED' } },
+        );
+        break;
+      case 'ENDED':
+        and.push({ endsAt: { lte: now } }, { status: { not: 'CANCELLED' } });
+        break;
+      case 'CANCELLED':
+        and.push({ status: 'CANCELLED' });
+        break;
+      default:
+      // brak statusu → nic nie dodajemy (pokaż wszystkie)
+    }
+
+    const where: Prisma.AuctionWhereInput = {
+      ...(and.length ? { AND: and } : {}),
+      ...(or.length ? { OR: or } : {}),
+    };
 
     const sortField = (q?.sort ??
       'endsAt') as keyof Prisma.AuctionOrderByWithRelationInput;
@@ -46,19 +88,20 @@ export class AuctionsService {
       this.prisma.auction.findMany({ where, orderBy, skip, take: limit }),
       this.prisma.auction.count({ where }),
     ]);
+
     return {
-      items: items.map((a) => ({ ...a, status: computeStatus(a) })), // <— tu
+      items: items.map((a) => ({ ...a, status: computeStatus(a) })),
       page,
       limit,
       total,
-      pages: Math.ceil(total / limit),
+      pages: Math.max(1, Math.ceil(total / limit)),
     };
   }
 
   async findOne(id: string) {
     const auction = await this.prisma.auction.findUnique({ where: { id } });
     if (!auction) throw new NotFoundException('Auction not found');
-    return { ...auction, status: computeStatus(auction) }; // <— tu
+    return { ...auction, status: computeStatus(auction) };
   }
 
   create(input: {
@@ -77,6 +120,7 @@ export class AuctionsService {
       currentPrice = 0,
       softCloseSec = 120,
     } = input;
+
     return this.prisma.auction
       .create({
         data: {

@@ -10,13 +10,15 @@ const API_BASE =
     : "http://localhost:3001");
 
 type User = { id: string; email: string; name?: string | null };
+
 type Props = {
   auctionId: string;
   minAmount: number;
   users: User[];
+  disabled?: boolean;
 };
 
-export default function BidForm({ auctionId, minAmount, users }: Props) {
+export default function BidForm({ auctionId, minAmount, users, disabled }: Props) {
   const router = useRouter();
   const [amount, setAmount] = useState<number>(minAmount);
   const [userId, setUserId] = useState<string>(users[0]?.id ?? "");
@@ -24,6 +26,7 @@ export default function BidForm({ auctionId, minAmount, users }: Props) {
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (disabled) return; // twarda blokada po stronie UI
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/bids`, {
@@ -31,22 +34,24 @@ export default function BidForm({ auctionId, minAmount, users }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: Number(amount), userId, auctionId }),
       });
-      // ...
 
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try {
           const data = await res.json();
           msg =
-            (Array.isArray(data?.message)
+            (typeof data?.message === "string"
+              ? data.message
+              : Array.isArray(data?.message)
               ? data.message.join(", ")
-              : data?.message) || msg;
+              : msg) ?? msg;
+          if (data?.code) msg = `${data.code}: ${msg}`;
         } catch {}
         alert(`Błąd: ${msg}`);
       } else {
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       alert("Nie udało się złożyć oferty.");
     } finally {
       setLoading(false);
@@ -55,16 +60,15 @@ export default function BidForm({ auctionId, minAmount, users }: Props) {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="flex flex-col sm:flex-row gap-2 items-stretch"
-    >
+    <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2 items-stretch">
       <select
         className="border rounded px-3 py-2 text-sm"
         value={userId}
         onChange={(e) => setUserId(e.target.value)}
         required
         aria-label="Użytkownik"
+        disabled={disabled || loading}
+        title={disabled ? "Licytacja dostępna tylko w trakcie LIVE" : undefined}
       >
         {users.map((u) => (
           <option key={u.id} value={u.id}>
@@ -83,11 +87,14 @@ export default function BidForm({ auctionId, minAmount, users }: Props) {
         placeholder={`min ${minAmount}`}
         aria-label="Kwota"
         required
+        disabled={disabled || loading}
+        title={disabled ? "Licytacja dostępna tylko w trakcie LIVE" : undefined}
       />
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={disabled || loading}
+        title={disabled ? "Licytacja dostępna tylko w trakcie LIVE" : undefined}
         className="rounded bg-foreground text-background px-4 py-2 text-sm disabled:opacity-60"
       >
         {loading ? "Licytuję…" : "Licytuj"}

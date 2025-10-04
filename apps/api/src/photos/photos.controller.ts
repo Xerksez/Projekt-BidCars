@@ -1,4 +1,3 @@
-// apps/api/src/photos/photos.controller.ts
 import {
   Controller,
   Get,
@@ -16,18 +15,9 @@ import { diskStorage } from 'multer';
 import type { Express } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
-
 import { PhotosService } from './photos.service';
 import { AdminOnly } from '../auth/api-key.decorator';
-
-// JEDNO źródło prawdy na uploady – to samo, z którego serwujesz statyki w main.ts
-// (przykład: process.cwd() + '/uploads')
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-const PUBLIC_BASE = process.env.API_PUBLIC_URL ?? 'http://localhost:3001';
-
-function ensureUploadDir() {
-  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+import { ensureUploadDir, UPLOAD_DIR, PUBLIC_BASE, ROOT_DIR } from '../paths';
 
 @ApiTags('photos')
 @Controller('photos')
@@ -46,27 +36,25 @@ export class PhotosController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: (_req, _file, cb) => {
+        destination: (req, file, cb) => {
           ensureUploadDir();
           cb(null, UPLOAD_DIR);
         },
-        filename: (_req, file, cb) => {
+        filename: (req, file, cb) => {
           const ext = path.extname(file.originalname) || '.jpg';
-          const name = `${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2, 10)}${ext}`;
+          const name = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`;
           cb(null, name);
         },
       }),
-      fileFilter: (_req, file, cb) => {
-        const ok =
-          file.mimetype.startsWith('image/') ||
-          /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(file.originalname);
-        // MUSI być 2-argumentowe wywołanie: (error, accept)
+      fileFilter: (req, file, cb) => {
+        // prosta walidacja typu
+        const ok = /image\/(jpeg|png|webp|gif|bmp|svg\+xml)/.test(
+          file.mimetype,
+        );
         if (!ok) return cb(new Error('Only image files are allowed'), false);
         cb(null, true);
       },
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     }),
   )
   @ApiBody({
@@ -87,14 +75,24 @@ export class PhotosController {
     )
     file: Express.Multer.File,
   ) {
-    const url = `${PUBLIC_BASE}/uploads/${file.filename}`; // absolutny URL, pewny
+    const url = `${PUBLIC_BASE}/uploads/${file.filename}`; // ABS URL do pliku w root/uploads
     return this.photos.create(auctionId, url);
   }
 
   @AdminOnly()
   @ApiSecurity('apiKey')
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string) {
     return this.photos.remove(id);
+  }
+
+  @Get('_debug')
+  debug() {
+    const files = fs.existsSync(UPLOAD_DIR) ? fs.readdirSync(UPLOAD_DIR) : [];
+    return {
+      ROOT_DIR,
+      UPLOAD_DIR,
+      files,
+    };
   }
 }

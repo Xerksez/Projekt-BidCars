@@ -26,6 +26,11 @@ export class AuctionsController {
   ) {}
 
   @Get()
+  list(@Query() q: ListAuctionsDto) {
+  return this.auctions.list(q);
+}
+
+  @Get()
   findAll(@Query() q: ListAuctionsDto) {
   return this.auctions.list(q);
 }

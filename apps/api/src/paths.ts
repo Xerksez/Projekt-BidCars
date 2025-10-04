@@ -3,51 +3,49 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 /**
- * 1) Jeśli ustawisz absolutne UPLOADS_DIR w env – użyjemy go wprost.
- * 2) W przeciwnym razie spróbujemy znaleźć root repo (pnpm-workspace.yaml
- *    albo package.json z polem "workspaces") idąc w górę katalogów.
- * 3) Domyślnie: <ROOT>/uploads
+ * Spróbuj wykryć root monorepo idąc w górę od __dirname (czyli od katalogu kompilacji, np. dist/src)
+ * Szukamy plików-znaczników: pnpm-workspace.yaml lub package.json zawierającego "apps" katalog.
  */
-
-function findRepoRoot(startDir: string): string {
+function detectRepoRoot(startDir: string): string {
   let dir = startDir;
-  // maksymalnie 10 poziomów w górę (bez paranoi)
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 6; i++) {
     const ws = path.join(dir, 'pnpm-workspace.yaml');
     const pkg = path.join(dir, 'package.json');
-
     if (fs.existsSync(ws)) return dir;
-
     if (fs.existsSync(pkg)) {
-      try {
-        const json = JSON.parse(fs.readFileSync(pkg, 'utf8'));
-        if (json && (json.workspaces || json?.pnpm?.packages)) return dir;
-      } catch { /* ignore */ }
+      // Heurystyka: jeśli na tym poziomie istnieje katalog "apps", traktujemy to jako root
+      if (fs.existsSync(path.join(dir, 'apps'))) return dir;
     }
-
     const parent = path.dirname(dir);
-    if (parent === dir) break; // dotarliśmy do dysku
+    if (parent === dir) break;
     dir = parent;
   }
   return startDir; // fallback
 }
 
-// 1) Priorytet: absolutna ścieżka z ENV (np. w Dockerze)
-const envUploads = process.env.UPLOADS_DIR;
-export const UPLOAD_DIR = envUploads && path.isAbsolute(envUploads)
-  ? envUploads
-  : path.join(
-      // 2) Spróbujmy wykryć root repo względem CWD (gdziekolwiek uruchamiasz)
-      findRepoRoot(process.cwd()),
-      'uploads',
-    );
+/**
+ * Priorytet:
+ * 1) Zmienna środowiskowa (na wszelki wypadek / Docker / prod)
+ * 2) Automatyczne wykrycie od __dirname (działa zarówno w src/, jak i w dist/)
+ * 3) process.cwd() jako ostatnia deska ratunku
+ */
+const ENV_ROOT = process.env.API_ROOT_DIR && fs.existsSync(process.env.API_ROOT_DIR)
+  ? path.resolve(process.env.API_ROOT_DIR)
+  : null;
 
-// Publiczna baza URL do budowania absolutnych linków do plików
+export const ROOT_DIR =
+  ENV_ROOT ||
+  detectRepoRoot(__dirname) ||
+  process.cwd();
+
+/** Docelowy katalog na uploady w root projektu */
+export const UPLOAD_DIR = path.join(ROOT_DIR, 'uploads');
+
+/** Publiczna baza URL dla API (np. http://localhost:3001) */
 export const PUBLIC_BASE = process.env.API_PUBLIC_URL ?? 'http://localhost:3001';
 
 export function ensureUploadDir() {
   if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   }
-  return UPLOAD_DIR;
 }
