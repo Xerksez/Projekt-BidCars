@@ -14,6 +14,8 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  passwordHash String?
+  role          Role     @default(USER)
 
   bids      Bid[]
 }
@@ -40,9 +42,12 @@ model Auction {
   photos       AuctionPhoto[]   
 
   bids         Bid[]
-  @@index([status])
-  @@index([endsAt])
-  @@index([endsAt, status(sort: Asc)])
+  @@index([status]) // filtrowanie po statusie
+  @@index([endsAt]) // sam endsAt (np. bez statusu)
+  @@index([endsAt, status(sort: Asc)]) // status + sort po endsAt
+  @@index([startsAt])  // ewentualne zapytania po starcie
+  @@index([createdAt])             // sort: createdAt
+  @@index([currentPrice])          // sort: currentPrice
   @@unique([source, sourceId], name: "source_sourceId")
   @@index([title])
   @@index([vin])
@@ -81,4 +86,10 @@ enum AuctionStatus {
   LIVE
   ENDED
   CANCELLED
+}
+
+
+enum Role {
+  USER
+  ADMIN
 }

@@ -1,7 +1,13 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BidsService } from './bids.service';
 import { CreateBidDto } from './dto/create-bid.dto';
-import { ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt.guard';
+
+// ⬇️ ROZDZIEL: wartość (dekorator) vs typ
+import { CurrentUser } from '../common/decorators/current-user';
+import type { JwtUser } from '../common/decorators/current-user';
+
 
 @ApiTags('bids')
 @Controller('bids')
@@ -9,8 +15,11 @@ export class BidsController {
   constructor(private readonly bids: BidsService) {}
 
   @Post()
-  create(@Body() body: CreateBidDto) {
-    return this.bids.create(body);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  create(@Body() body: CreateBidDto, @CurrentUser() user: JwtUser) {
+    // user pochodzi z JWT; serwis dostaje jawnie userId
+    return this.bids.create({ ...body, userId: user.sub });
   }
 
   @Get('auction/:auctionId')

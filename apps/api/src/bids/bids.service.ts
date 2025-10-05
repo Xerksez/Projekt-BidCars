@@ -1,9 +1,9 @@
+// apps/api/src/bids/bids.service.ts
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBidDto } from './dto/create-bid.dto';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -14,10 +14,10 @@ const MIN_INCREMENT = 100;
 export class BidsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly realtime: RealtimeGateway, 
+    private readonly realtime: RealtimeGateway,
   ) {}
 
-  async create(input: CreateBidDto) {
+  async create(input: CreateBidDto & { userId: string }) {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: input.userId } });
       if (!user) throw new NotFoundException('User not found');
@@ -28,7 +28,6 @@ export class BidsService {
       if (!auction) throw new NotFoundException('Auction not found');
 
       const now = new Date();
-
       if (now < auction.startsAt) {
         throw new BadRequestException(
           `Auction not started yet (starts at ${auction.startsAt.toISOString()})`,
@@ -51,9 +50,7 @@ export class BidsService {
           userId: input.userId,
           auctionId: input.auctionId,
         },
-        include: {
-          user: { select: { id: true, email: true, name: true } },
-        },
+        include: { user: { select: { id: true, email: true, name: true } } },
       });
 
       await tx.auction.update({
@@ -61,21 +58,17 @@ export class BidsService {
         data: { currentPrice: input.amount },
       });
 
-      // ... po update currentPrice:
       const endsAt = new Date(auction.endsAt);
       const diffSec = Math.floor((endsAt.getTime() - now.getTime()) / 1000);
-
       if (diffSec <= auction.softCloseSec) {
         const newEndsAt = new Date(
           endsAt.getTime() + auction.softCloseSec * 1000,
         );
-
         await tx.auction.update({
           where: { id: input.auctionId },
           data: { endsAt: newEndsAt },
         });
 
-        // opcjonalnie realtime event o przedłużeniu (patrz 2)
         this.realtime.emitAuctionExtended?.({
           auctionId: input.auctionId,
           endsAt: newEndsAt.toISOString(),
@@ -83,7 +76,6 @@ export class BidsService {
         });
       }
 
-      // ⬇️ realtime event
       this.realtime.emitBidCreated({
         auctionId: input.auctionId,
         bidId: bid.id,

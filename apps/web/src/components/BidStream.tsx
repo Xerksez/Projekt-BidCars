@@ -1,3 +1,4 @@
+// apps/web/src/components/BidStream.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -15,55 +16,38 @@ export default function BidStream({ auctionId }: { auctionId: string }) {
 
   useEffect(() => {
     let socket: Socket | null = null;
-    let retries = 0;
-    const maxRetries = 5;
 
-    const connect = () => {
+    function connect() {
       socket = io(`${WS_BASE}/ws`, {
         transports: ["websocket"],
         reconnection: true,
-        reconnectionAttempts: maxRetries,
-        reconnectionDelay: 1000,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 500,
         reconnectionDelayMax: 5000,
+        randomizationFactor: 0.5,
       });
 
       socket.on("connect", () => {
-        retries = 0;
-        socket!.emit("auction.join", { auctionId });
+        socket?.emit("auction.join", { auctionId });
       });
 
-      socket.on("disconnect", () => {
-        // nic – socket.io samo zreconnectuje wg opcji
+      socket.on("bid.created", () => router.refresh());
+      socket.on("auction.extended", () => router.refresh());
+      socket.on("auction.status", () => router.refresh());
+
+      // opcjonalny heartbeat/logi
+      socket.on("connect_error", () => {
+        // tu można dodać toast/log
       });
+      socket.on("reconnect_attempt", () => {});
+      socket.on("reconnect", () => {});
+    }
 
-      // -- zdarzenia domenowe --
-      const refresh = () => router.refresh();
-      socket.on("bid.created", refresh);
-      socket.on("auction.extended", refresh);
-      socket.on("auction.status", refresh);
-
-      // czyszczenie przy unmount
-      return () => {
-        if (!socket) return;
-        socket.off("bid.created");
-        socket.off("auction.extended");
-        socket.off("auction.status");
-        socket.disconnect();
-        socket = null;
-      };
-    };
-
-    const cleanup = connect();
-
-    // dodatkowy refresh po powrocie do karty
-    const onVisible = () => {
-      if (document.visibilityState === "visible") router.refresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
+    connect();
     return () => {
-      cleanup?.();
-      document.removeEventListener("visibilitychange", onVisible);
+      socket?.off();
+      socket?.disconnect();
+      socket = null;
     };
   }, [auctionId, router]);
 

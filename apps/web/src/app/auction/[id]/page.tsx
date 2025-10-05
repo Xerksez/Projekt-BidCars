@@ -11,7 +11,11 @@ export const dynamic = "force-dynamic";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 async function safeJson(res: Response) {
-  try { return await res.json(); } catch { return null; }
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 async function getAuction(id: string) {
@@ -49,7 +53,9 @@ export default async function AuctionPage({
     <div className="mx-auto max-w-3xl p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Aukcja</h1>
-        <Link href="/" className="text-sm underline underline-offset-4">← Powrót</Link>
+        <Link href="/" className="text-sm underline underline-offset-4">
+          ← Powrót
+        </Link>
       </div>
 
       {auctionRes.ok && <BidStream auctionId={auctionRes.data.id} />}
@@ -57,10 +63,21 @@ export default async function AuctionPage({
       {!auctionRes.ok && (
         <div className="rounded border border-red-400 bg-red-50 p-4 text-sm">
           <div className="font-semibold mb-1">Nie udało się pobrać aukcji</div>
-          <div><b>API:</b> {API}</div>
-          <div><b>ID:</b> {id}</div>
-          <div><b>Status:</b> {auctionRes.status}</div>
-          <div><b>Message:</b> {typeof auctionRes.data?.message === "string" ? auctionRes.data.message : JSON.stringify(auctionRes.data)}</div>
+          <div>
+            <b>API:</b> {API}
+          </div>
+          <div>
+            <b>ID:</b> {id}
+          </div>
+          <div>
+            <b>Status:</b> {auctionRes.status}
+          </div>
+          <div>
+            <b>Message:</b>{" "}
+            {typeof auctionRes.data?.message === "string"
+              ? auctionRes.data.message
+              : JSON.stringify(auctionRes.data)}
+          </div>
         </div>
       )}
 
@@ -86,23 +103,33 @@ export default async function AuctionPage({
   );
 }
 
-type Phase = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
+type Phase = "SCHEDULED" | "LIVE" | "ENDED" | "CANCELLED";
 
 function AuctionView({
-  auction, bidsOk, bids, usersOk, users, photos,
+  auction,
+  bidsOk,
+  bids,
+  usersOk,
+  users,
+  photos,
 }: {
-  auction: any; bidsOk: boolean; bids: any[]; usersOk: boolean; users: any[]; photos: any[];
+  auction: any;
+  bidsOk: boolean;
+  bids: any[];
+  usersOk: boolean;
+  users: any[];
+  photos: any[];
 }) {
   // Preferujemy status z backendu (computeStatus), a jak go brak – fallback na czas
   const now = Date.now();
   const startsAtMs = new Date(auction.startsAt).getTime();
   const endsAtMs = new Date(auction.endsAt).getTime();
-  const phaseFromTime: Exclude<Phase, 'CANCELLED'> =
-    now < startsAtMs ? 'SCHEDULED' : (now >= endsAtMs ? 'ENDED' : 'LIVE');
+  const phaseFromTime: Exclude<Phase, "CANCELLED"> =
+    now < startsAtMs ? "SCHEDULED" : now >= endsAtMs ? "ENDED" : "LIVE";
   const phase: Phase = (auction?.status as Phase | undefined) ?? phaseFromTime;
 
-  const isLive = phase === 'LIVE';
-  const isEnded = phase === 'ENDED';
+  const isLive = phase === "LIVE";
+  const isEnded = phase === "ENDED";
 
   const minAmount = Number(auction?.currentPrice ?? 0) + 100;
 
@@ -122,7 +149,10 @@ function AuctionView({
                 : `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}${p?.url ?? ""}`;
 
               return (
-                <div key={p.id} className="relative aspect-video overflow-hidden rounded border">
+                <div
+                  key={p.id}
+                  className="relative aspect-video overflow-hidden rounded border"
+                >
                   <Image
                     src={src}
                     alt={auction.title}
@@ -152,7 +182,8 @@ function AuctionView({
         <div className="rounded border p-4">
           <div className="text-sm opacity-70">Okres</div>
           <div className="font-medium">
-            {new Date(auction.startsAt).toLocaleString()} → {new Date(auction.endsAt).toLocaleString()}
+            {new Date(auction.startsAt).toLocaleString()} →{" "}
+            {new Date(auction.endsAt).toLocaleString()}
           </div>
         </div>
         <div className="rounded border p-4">
@@ -163,20 +194,27 @@ function AuctionView({
 
       <div className="rounded border p-4">
         <h2 className="font-semibold mb-3">Złóż ofertę</h2>
-        {isLive ? (
-          usersOk && users.length > 0 ? (
-            <BidForm
-              auctionId={auction.id}
-              minAmount={minAmount}
-              users={users}
-              disabled={!isLive}
-            />
-          ) : (
-            <p className="text-sm opacity-70">Brak użytkowników. Dodaj przez POST /users.</p>
-          )
+
+        {usersOk && users.length > 0 ? (
+          <BidForm
+            auctionId={auction.id}
+            minAmount={minAmount}
+            users={users}
+            disabled={!isLive} /* <— NEW */
+          />
         ) : (
           <p className="text-sm opacity-70">
-            Licytacja niedostępna: {isEnded ? "aukcja zakończona" : "aukcja jeszcze się nie rozpoczęła"}.
+            Brak użytkowników. Dodaj przez POST /users.
+          </p>
+        )}
+
+        {!isLive && (
+          <p className="text-xs opacity-70 mt-2">
+            Licytacja niedostępna:{" "}
+            {isEnded
+              ? "aukcja zakończona"
+              : "aukcja jeszcze się nie rozpoczęła"}
+            .
           </p>
         )}
       </div>
@@ -187,11 +225,15 @@ function AuctionView({
           bids?.length ? (
             <ul className="space-y-2">
               {bids.map((b: any) => (
-                <li key={b.id} className="flex items-center justify-between border rounded p-3">
+                <li
+                  key={b.id}
+                  className="flex items-center justify-between border rounded p-3"
+                >
                   <div className="text-sm">
                     <div className="font-medium">${b.amount}</div>
                     <div className="opacity-70 text-xs">
-                      {new Date(b.createdAt).toLocaleString()} • {b.user?.name ?? b.user?.email}
+                      {new Date(b.createdAt).toLocaleString()} •{" "}
+                      {b.user?.name ?? b.user?.email}
                     </div>
                   </div>
                 </li>
@@ -201,7 +243,9 @@ function AuctionView({
             <p className="text-sm opacity-70">Brak ofert.</p>
           )
         ) : (
-          <p className="text-sm text-red-600">Nie udało się pobrać listy ofert.</p>
+          <p className="text-sm text-red-600">
+            Nie udało się pobrać listy ofert.
+          </p>
         )}
       </div>
     </>

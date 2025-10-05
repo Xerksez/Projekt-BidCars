@@ -14,21 +14,30 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
   );
 
-   app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' }, // żeby obrazki z /uploads działały z web
-  }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' }, // żeby obrazki z /uploads działały z web
+    }),
+  );
 
-
-   app.enableCors({
+  app.enableCors({
     origin: (origin, cb) => cb(null, true), // dev: dowolne
     credentials: true,
     allowedHeaders: 'Content-Type, Authorization, x-api-key',
     methods: 'GET,POST,PATCH,DELETE,OPTIONS',
   });
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      // ⬇️ kluczowe:
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
   app.useGlobalFilters(new AllExceptionsFilter());
-  
+
   // Swagger
   const config = new DocumentBuilder()
     .setTitle('BidCars API')

@@ -1,9 +1,7 @@
 // apps/web/src/app/page.tsx
 import Image from "next/image";
-import Link from "next/link";
 import AuctionsFilterBar from "@/components/AuctionsFilterBar";
-
-export const dynamic = "force-dynamic";
+import AuctionCard from "@/components/AuctionCard";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -11,6 +9,7 @@ async function getAuctions(search: string) {
   const url = new URL("/auctions", API);
   url.search = search;
   const res = await fetch(url.toString(), { cache: "no-store" });
+
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`API ${res.status}: ${txt || res.statusText}`);
@@ -18,136 +17,150 @@ async function getAuctions(search: string) {
   return res.json();
 }
 
-type SearchParams = Record<string, string | string[] | undefined>;
-
 export default async function Home({
   searchParams,
 }: {
-  // 👇 Next 15: searchParams to Promise — trzeba await
-  searchParams: Promise<SearchParams>;
+  // Next 15: searchParams musi być awaitowane
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
 
-  // zbuduj query z obsługą string i string[]
-  const query = new URLSearchParams();
-  if (sp) {
-    for (const [k, v] of Object.entries(sp)) {
-      if (typeof v === "string") query.set(k, v);
-      else if (Array.isArray(v)) v.forEach((val) => query.append(k, val));
-    }
-  }
-  // domyślne parametry
-  if (!query.has("page")) query.set("page", "1");
-  if (!query.has("limit")) query.set("limit", "10");
-  if (!query.has("sort")) query.set("sort", "endsAt");
-  if (!query.has("order")) query.set("order", "asc");
+  const pick = (v: unknown, def: string): string =>
+    typeof v === "string" && v.length > 0 ? v : def;
 
-  const data = await getAuctions(query.toString());
-  const items = data.items ?? [];
-  const page = Number(data.page ?? 1);
-  const pages = Number(data.pages ?? 1);
+  // Domyślnie: LIVE + SCHEDULED; ENDED tylko po wybraniu w URL
+  const status = typeof sp.status === "string" ? sp.status : "";
+  const excludeEnded = status === "ENDED" ? "0" : pick(sp.excludeEnded, "1");
+  const search = pick(sp.search, "");
+  const sort = pick(sp.sort, "endsAt");
+  const order = pick(sp.order, "asc");
+  const limit = pick(sp.limit, "15"); // ← domyślnie 15
+  const page = pick(sp.page, "1");
+
+  const usp = new URLSearchParams();
+  if (search) usp.set("search", search);
+  if (status === "ENDED") {
+    usp.set("status", "ENDED");
+  } else {
+    usp.set("excludeEnded", excludeEnded);
+  }
+  usp.set("sort", sort);
+  usp.set("order", order);
+  usp.set("limit", limit);
+  usp.set("page", page);
+
+  let data: {
+    items: any[];
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  } | null = null;
+  let loadError: string | null = null;
+
+  try {
+    data = await getAuctions(usp.toString());
+  } catch (e: any) {
+    loadError = e?.message ?? "Nieznany błąd API";
+  }
+
+  const items = data?.items ?? [];
+  const pageNum = Number(data?.page ?? 1);
+  const pages = Number(data?.pages ?? 1);
 
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 w-full">
+    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 w-full bg-neutral-950 text-neutral-100">
       <main className="flex flex-col gap-6 row-start-2 items-center sm:items-start w-full max-w-3xl">
         <Image
-          className="dark:invert"
+          className="opacity-90"
           src="/next.svg"
           alt="Next.js logo"
           width={180}
           height={38}
           priority
         />
-        <h2 className="text-xl font-semibold">Aukcje</h2>
+
+        <h2 className="text-2xl font-semibold text-neutral-100">Aukcje</h2>
 
         <AuctionsFilterBar />
 
-        <div className="w-full rounded border p-4">
-          {items.length === 0 ? (
-            <p className="text-sm opacity-70">Brak wyników.</p>
-          ) : (
-            <ul className="space-y-2">
-              {items.map((a: any) => (
-                <li key={a.id} className="border rounded p-3">
-                  <div className="font-medium">
-                    <Link
-                      className="underline underline-offset-4"
-                      href={`/auction/${a.id}`}
-                    >
-                      {a.title}
-                    </Link>
-                  </div>
-                  <div className="text-xs opacity-70">VIN: {a.vin ?? "—"}</div>
-                  <div className="text-xs opacity-70">
-                    {new Date(a.startsAt).toLocaleString()} →{" "}
-                    {new Date(a.endsAt).toLocaleString()}
-                  </div>
-                  <div className="text-sm mt-1">
-                    Cena bieżąca: ${a.currentPrice}
-                  </div>
-                  <span
-                    className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border
-              ${
-                a.status === "LIVE"
-                  ? "bg-green-100 text-green-700 border-green-300"
-                  : a.status === "SCHEDULED"
-                    ? "bg-amber-100 text-amber-700 border-amber-300"
-                    : "bg-gray-200 text-gray-700 border-gray-300"
-              }`}
-                  >
-                    {a.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {loadError && (
+          <div className="w-full rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-200">
+            <div className="font-semibold mb-1">
+              Nie udało się pobrać listy aukcji
+            </div>
+            <div className="break-all">{loadError}</div>
+          </div>
+        )}
 
-        {/* Paginacja */}
-        <Pagination page={page} pages={pages} sp={sp} />
+        {!loadError && (
+          <div className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-4 shadow-sm">
+            {items.length === 0 ? (
+              <p className="text-sm text-neutral-300">Brak wyników.</p>
+            ) : (
+              <ul className="space-y-2">
+                {items.map((a: any, i: number) => (
+                  <AuctionCard key={a?.id ?? i} a={a} />
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {!loadError && <Pagination page={pageNum} pages={pages} />}
       </main>
+
+      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center text-neutral-300">
+        <a
+          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
+          href="https://nextjs.org/learn"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Image
+            aria-hidden
+            src="/file.svg"
+            alt="File icon"
+            width={16}
+            height={16}
+          />
+          Learn
+        </a>
+      </footer>
     </div>
   );
 }
 
-function Pagination({
-  page,
-  pages,
-  sp,
-}: {
-  page: number;
-  pages: number;
-  sp: Record<string, string | string[] | undefined>;
-}) {
+function Pagination({ page, pages }: { page: number; pages: number }) {
   if (pages <= 1) return null;
-
-  // bazowy zestaw parametrów (bez użycia window — działa w RSC)
-  const base = new URLSearchParams();
-  for (const [k, v] of Object.entries(sp ?? {})) {
-    if (typeof v === "string") base.set(k, v);
-    else if (Array.isArray(v)) v.forEach((val) => base.append(k, val));
-  }
-
-  const linkFor = (p: number) => {
-    const q = new URLSearchParams(base);
-    q.set("page", String(p));
-    return `/?${q.toString()}`;
-  };
-
   const prev = Math.max(1, page - 1);
   const next = Math.min(pages, page + 1);
 
+  const qs = (p: number) => {
+    const usp = new URLSearchParams(
+      typeof window === "undefined" ? "" : window.location.search
+    );
+    usp.set("page", String(p));
+    return `?${usp.toString()}`;
+  };
+
   return (
     <div className="flex gap-2 items-center">
-      <Link href={linkFor(prev)} className="px-3 py-1 border rounded text-sm">
+      <a
+        href={qs(prev)}
+        className="px-3 py-1 border border-neutral-700 rounded text-sm bg-neutral-900 hover:bg-neutral-800"
+      >
         ← Poprzednia
-      </Link>
-      <span className="text-sm opacity-70">
+      </a>
+      <span className="text-sm text-neutral-300">
         {page} / {pages}
       </span>
-      <Link href={linkFor(next)} className="px-3 py-1 border rounded text-sm">
+      <a
+        href={qs(next)}
+        className="px-3 py-1 border border-neutral-700 rounded text-sm bg-neutral-900 hover:bg-neutral-800"
+      >
         Następna →
-      </Link>
+      </a>
     </div>
   );
 }

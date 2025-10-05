@@ -9,6 +9,11 @@ import { PhotosModule } from './photos/photos.module';
 import { ImportController } from './import/import.controller';
 import { AuctionsImportService } from './import/auctions-import.service';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
+import { RedisModule } from './redis/redis.module';
+import { HealthModule } from './health/health.module';
+import type { IncomingMessage } from 'http';
+import { AuthModule } from './auth/auth.module';
 //import { VendorModule } from './vendor/vendor.module';
 
 @Module({
@@ -18,8 +23,38 @@ import { ThrottlerModule } from '@nestjs/throttler';
     AuctionsModule,
     UsersModule,
     BidsModule,
+    RedisModule,
+    HealthModule,
     PhotosModule,
-    ThrottlerModule.forRoot([ { ttl: 60_000, limit: 100 } ]),
+    AuthModule,
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+        transport:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : {
+                target: 'pino-pretty',
+                options: { singleLine: true, colorize: true },
+              },
+
+        // <-- TUTAJ
+        customProps: (req: IncomingMessage) => {
+          const rec = req as unknown as Record<string, unknown>;
+          const ip =
+            (rec['ip'] as string | undefined) ??
+            req.socket?.remoteAddress ??
+            null;
+
+          const reqId = rec['id'] as string | undefined;
+          const userAgent = req.headers['user-agent'];
+
+          return { reqId, ip, userAgent };
+        },
+      },
+    }),
+
     //VendorModule,
   ],
   controllers: [AppController, ImportController],

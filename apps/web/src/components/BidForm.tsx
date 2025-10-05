@@ -15,7 +15,7 @@ type Props = {
   auctionId: string;
   minAmount: number;
   users: User[];
-  disabled?: boolean;
+  disabled?: boolean; // <— NEW
 };
 
 export default function BidForm({ auctionId, minAmount, users, disabled }: Props) {
@@ -26,7 +26,7 @@ export default function BidForm({ auctionId, minAmount, users, disabled }: Props
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (disabled) return; // twarda blokada po stronie UI
+    if (disabled) return;
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/bids`, {
@@ -68,7 +68,7 @@ export default function BidForm({ auctionId, minAmount, users, disabled }: Props
         required
         aria-label="Użytkownik"
         disabled={disabled || loading}
-        title={disabled ? "Licytacja dostępna tylko w trakcie LIVE" : undefined}
+        title={disabled ? "Licytacja niedostępna poza LIVE" : undefined}
       >
         {users.map((u) => (
           <option key={u.id} value={u.id}>
@@ -88,13 +88,13 @@ export default function BidForm({ auctionId, minAmount, users, disabled }: Props
         aria-label="Kwota"
         required
         disabled={disabled || loading}
-        title={disabled ? "Licytacja dostępna tylko w trakcie LIVE" : undefined}
+        title={disabled ? "Licytacja niedostępna poza LIVE" : undefined}
       />
 
       <button
         type="submit"
         disabled={disabled || loading}
-        title={disabled ? "Licytacja dostępna tylko w trakcie LIVE" : undefined}
+        title={disabled ? "Licytacja niedostępna poza LIVE" : undefined}
         className="rounded bg-foreground text-background px-4 py-2 text-sm disabled:opacity-60"
       >
         {loading ? "Licytuję…" : "Licytuj"}
