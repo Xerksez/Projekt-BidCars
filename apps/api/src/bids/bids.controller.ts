@@ -8,7 +8,6 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../common/decorators/current-user';
 import type { JwtUser } from '../common/decorators/current-user';
 
-
 @ApiTags('bids')
 @Controller('bids')
 export class BidsController {
@@ -16,7 +15,7 @@ export class BidsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   create(@Body() body: CreateBidDto, @CurrentUser() user: JwtUser) {
     // user pochodzi z JWT; serwis dostaje jawnie userId
     return this.bids.create({ ...body, userId: user.sub });

@@ -14,6 +14,7 @@ import { RedisModule } from './redis/redis.module';
 import { HealthModule } from './health/health.module';
 import type { IncomingMessage } from 'http';
 import { AuthModule } from './auth/auth.module';
+import { ConfigModule } from '@nestjs/config';
 //import { VendorModule } from './vendor/vendor.module';
 
 @Module({
@@ -21,6 +22,9 @@ import { AuthModule } from './auth/auth.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     AuctionsModule,
+    ConfigModule.forRoot({
+      isGlobal: true, // <-- to sprawia, że ConfigService działa w każdym module
+    }),
     UsersModule,
     BidsModule,
     RedisModule,

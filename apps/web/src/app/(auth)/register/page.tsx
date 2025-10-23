@@ -1,52 +1,106 @@
-'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+"use client";
+
+import { useState, FormEvent } from "react";
+import { apiFetch } from "@/lib/api";
+import Link from "next/link";
 
 export default function RegisterPage() {
-  const r = useRouter();
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setLoading(true); setErr(null);
+    setErr(null);
+    setOk(false);
+    setLoading(true);
+    console.log("[RegisterPage] submit", { email, name });
+
     try {
-      const res = await apiFetch('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, name, password }),
+      const res = await apiFetch("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ name, email, password }),
       });
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || `HTTP ${res.status}`);
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || "Register failed");
       }
-      r.push('/account');
-      r.refresh();
+
+      console.log("[RegisterPage] register OK → dispatch login");
+      // auto-login (backend już ustawia cookie)
+      window.dispatchEvent(new Event("auth:login"));
+      window.location.href = "/";
+      return;
     } catch (e: any) {
-      setErr(e?.message || 'Błąd rejestracji');
+      console.error("[RegisterPage] error:", e);
+      setErr(e?.message ?? "Rejestracja nie powiodła się");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-sm p-6">
+    <div className="mx-auto max-w-md p-6">
       <h1 className="text-2xl font-semibold mb-4">Rejestracja</h1>
+
+      {err && (
+        <div className="mb-3 rounded border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">
+          {err}
+        </div>
+      )}
+      {ok && (
+        <div className="mb-3 rounded border border-emerald-800 bg-emerald-950/40 p-3 text-sm text-emerald-200">
+          Konto utworzone. Przekierowuję...
+        </div>
+      )}
+
       <form onSubmit={onSubmit} className="space-y-3">
-        <input className="w-full border rounded px-3 py-2 bg-neutral-900 text-neutral-100"
-               placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
-        <input className="w-full border rounded px-3 py-2 bg-neutral-900 text-neutral-100"
-               placeholder="Imię (opcjonalnie)" value={name} onChange={e=>setName(e.target.value)} />
-        <input className="w-full border rounded px-3 py-2 bg-neutral-900 text-neutral-100"
-               type="password" placeholder="Hasło" value={password} onChange={e=>setPassword(e.target.value)} />
-        {err && <div className="text-sm text-red-400">{err}</div>}
-        <button disabled={loading} className="px-3 py-2 rounded bg-indigo-600 text-white">
-          {loading ? 'Tworzenie…' : 'Załóż konto'}
+        <input
+          type="text"
+          placeholder="Imię (opcjonalnie)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full border border-zinc-700 rounded-md bg-zinc-900 px-3 py-2"
+        />
+        <input
+          type="email"
+          placeholder="E-mail"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full border border-zinc-700 rounded-md bg-zinc-900 px-3 py-2"
+          required
+        />
+        <input
+          type="password"
+          placeholder="Hasło"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full border border-zinc-700 rounded-md bg-zinc-900 px-3 py-2"
+          required
+          minLength={6}
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-md bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 disabled:opacity-60"
+        >
+          {loading ? "Rejestruję..." : "Zarejestruj"}
         </button>
       </form>
+
+      <p className="text-sm mt-3 text-neutral-400">
+        Masz już konto?{" "}
+        <Link
+          href="/login"
+          className="underline text-indigo-400 hover:text-indigo-300"
+        >
+          Zaloguj się
+        </Link>
+      </p>
     </div>
   );
 }

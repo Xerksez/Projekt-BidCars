@@ -12,10 +12,15 @@
     "lint": "pnpm -r eslint .",
     "fix": "pnpm -r eslint . --fix",
     "format": "prettier --write .",
-     "build:all": "pnpm -r build",
+    "build:all": "pnpm -r build",
     "db:reset": "pnpm --filter api dlx prisma migrate reset -f && pnpm --filter api dlx prisma db seed"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7"
   }
 }

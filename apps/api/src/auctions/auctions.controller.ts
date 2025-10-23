@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiSecurity } from '@nestjs/swagger';
 
 import { AuctionsService } from './auctions.service';
 import { CreateAuctionDto } from './dto/create-auction.dto';
@@ -17,9 +17,7 @@ import { UpdateAuctionDto } from './dto/update-auction.dto';
 import { ListAuctionsDto } from './dto/list-auctions.dto';
 
 // ⬇️ auth
-import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { ApiKeyGuard } from 'src/auth/api-key.guard';
 
 @ApiTags('auctions')
 @Controller('auctions')
@@ -40,27 +38,24 @@ export class AuctionsController {
 
   // ADMIN ONLY: create
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles('ADMIN')
+  @UseGuards(ApiKeyGuard)
+  @ApiSecurity('x-api-key')
   create(@Body() dto: CreateAuctionDto) {
     return this.auctions.create(dto);
   }
 
   // ADMIN ONLY: update
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles('ADMIN')
+  @UseGuards(ApiKeyGuard)
+ @ApiSecurity('x-api-key')
   update(@Param('id') id: string, @Body() dto: UpdateAuctionDto) {
     return this.auctions.update(id, dto);
   }
 
   // ADMIN ONLY: delete
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles('ADMIN')
+  @UseGuards(ApiKeyGuard)
+ @ApiSecurity('x-api-key')
   remove(@Param('id') id: string) {
     return this.auctions.remove(id);
   }

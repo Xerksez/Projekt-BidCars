@@ -3,8 +3,8 @@ import BidForm from "@/components/BidForm";
 import BidStream from "@/components/BidStream";
 import LiveStatus from "@/components/LiveStatus";
 import Image from "next/image";
-import PhotoAdmin from "@/components/PhotoAdmin";
 import PhotoDeleteButton from "@/components/PhotoDeleteButton";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +16,19 @@ async function safeJson(res: Response) {
   } catch {
     return null;
   }
+}
+
+type Me = { id: string; email: string; name?: string | null; role?: string };
+
+async function getMe(): Promise<Me | null> {
+  const cookieStore = await cookies();
+  const cookie = cookieStore.toString();
+  const res = await fetch(`${API}/auth/me`, {
+    headers: { Cookie: cookie },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return res.json();
 }
 
 async function getAuction(id: string) {
@@ -42,11 +55,12 @@ export default async function AuctionPage({
 }) {
   const { id } = await params;
 
-  const [auctionRes, bidsRes, usersRes, photos] = await Promise.all([
+  const [auctionRes, bidsRes, usersRes, photos, me] = await Promise.all([
     getAuction(id),
     getBids(id),
     getUsers(),
     getPhotos(id),
+    getMe(),
   ]);
 
   return (
@@ -96,6 +110,7 @@ export default async function AuctionPage({
             usersOk={usersRes.ok}
             users={usersRes.data ?? []}
             photos={photos ?? []}
+            isAuthed={!!me}
           />
         </>
       )}
@@ -112,6 +127,7 @@ function AuctionView({
   usersOk,
   users,
   photos,
+  isAuthed,
 }: {
   auction: any;
   bidsOk: boolean;
@@ -119,6 +135,7 @@ function AuctionView({
   usersOk: boolean;
   users: any[];
   photos: any[];
+  isAuthed: boolean;
 }) {
   // Preferujemy status z backendu (computeStatus), a jak go brak – fallback na czas
   const now = Date.now();
@@ -135,10 +152,6 @@ function AuctionView({
 
   return (
     <>
-      <div className="rounded border p-4">
-        <PhotoAdmin auctionId={auction.id} />
-      </div>
-
       <div className="rounded border p-4">
         <h2 className="font-semibold mb-3">Zdjęcia</h2>
         {photos?.length ? (
@@ -199,7 +212,7 @@ function AuctionView({
           <BidForm
             auctionId={auction.id}
             minAmount={minAmount}
-            users={users}
+            isAuthed={isAuthed}
             disabled={!isLive} /* <— NEW */
           />
         ) : (

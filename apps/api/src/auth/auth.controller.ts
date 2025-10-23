@@ -6,6 +6,7 @@ import {
   Res,
   UseGuards,
   Req,
+  Logger,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 // ⬇️ KLUCZOWE: import type
@@ -15,29 +16,35 @@ import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
 
 import { JwtAuthGuard } from './jwt.guard';
+import { JwtService } from '@nestjs/jwt';
 
 const COOKIE_NAME = 'bidcars_token';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  private readonly logger = new Logger(AuthController.name);
+  constructor(
+    private readonly auth: AuthService,
+    private readonly jwt: JwtService,
+  ) {}
 
   @Post('register')
   async register(
     @Body() body: RegisterDto,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.logger.log(`register start email=${body.email}`);
     const user = await this.auth.register(body.email, body.password, body.name);
-    // auto-login po rejestracji
     const result = await this.auth.login(body.email, body.password);
     res.cookie(COOKIE_NAME, result.token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: false, // prod: true
+      secure: false,
       maxAge: 7 * 24 * 3600 * 1000,
       path: '/',
     });
+    this.logger.log(`register ok uid=${user.id} cookie set`);
     return { user };
   }
 
@@ -46,29 +53,35 @@ export class AuthController {
     @Body() body: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.logger.log(`login start email=${body.email}`);
     const result = await this.auth.login(body.email, body.password);
     res.cookie(COOKIE_NAME, result.token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: false, // prod: true
+      secure: false,
       maxAge: 7 * 24 * 3600 * 1000,
       path: '/',
     });
+    this.logger.log(`login ok uid=${result.user.id} cookie set`);
     return { user: result.user };
   }
 
   @Post('logout')
   async logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie(COOKIE_NAME, { path: '/' });
+    this.logger.log('logout ok cookie cleared');
     return { ok: true };
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+@ApiBearerAuth('bearer')
   me(@Req() req: Request) {
-    // user jest dokładany przez guard (typowo: { sub, role })
     // @ts-expect-error – dodane przez guard
+    const uid = req.user?.sub;
+    this.logger.debug(`me ok uid=${uid}`);
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error
     return this.auth.me(req.user.sub);
   }
 }

@@ -17,7 +17,7 @@ model User {
   passwordHash String?
   role          Role     @default(USER)
 
-  bids      Bid[]
+  bids      Bid[]  @relation("UserBids") 
 }
 
 model Auction {
@@ -74,7 +74,7 @@ model Bid {
   userId    String
   auctionId String
 
-  user      User    @relation(fields: [userId], references: [id])
+  user      User    @relation(fields: [userId], references: [id], name: "UserBids")
   auction   Auction @relation(fields: [auctionId], references: [id])
 
   @@index([auctionId, createdAt])

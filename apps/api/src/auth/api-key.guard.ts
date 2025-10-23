@@ -1,17 +1,28 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+// apps/api/src/auth/api-key.guard.ts
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Request } from 'express';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
-  canActivate(ctx: ExecutionContext): boolean {
-    const req = ctx.switchToHttp().getRequest<Request & { headers: Record<string, string | undefined> }>();
-    const provided = (req.headers['x-api-key'] ?? req.headers['X-API-KEY'] ?? '') as string;
-    const expected = process.env.ADMIN_API_KEY;
+  constructor(private readonly config: ConfigService) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const req = context.switchToHttp().getRequest<Request>();
+    const provided = req.header('x-api-key');
+    const expected = this.config.get<string>('ADMIN_API_KEY');
+
     if (!expected) {
-     
-      throw new UnauthorizedException('Missing ADMIN_API_KEY on server');
+      throw new UnauthorizedException('API key not configured');
     }
     if (!provided || provided !== expected) {
-      throw new UnauthorizedException('Invalid API key');
+      throw new ForbiddenException('Invalid API key');
     }
     return true;
   }

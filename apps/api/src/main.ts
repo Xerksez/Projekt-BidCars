@@ -6,9 +6,12 @@ import * as express from 'express';
 import { UPLOAD_DIR, ensureUploadDir } from './paths';
 import helmet from 'helmet';
 import { AllExceptionsFilter } from './common/http-exception.filter';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(cookieParser());
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
@@ -41,9 +44,23 @@ async function bootstrap() {
   // Swagger
   const config = new DocumentBuilder()
     .setTitle('BidCars API')
-    .setDescription('Aukcje i licytacje (dev)')
-    .setVersion('1.0.0')
-    .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'apiKey')
+    .setDescription('Public + admin endpoints')
+    .setVersion('1.0')
+    // Bearer (JWT) – dla zwykłych userów
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
+      'bearer',
+    )
+    // x-api-key – dla akcji admina / systemowych
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'x-api-key',
+        in: 'header',
+        description: 'Admin API key',
+      },
+      'x-api-key',
+    )
     .build();
   const doc = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('/docs', app, doc);

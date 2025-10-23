@@ -1,104 +1,100 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:3001`
-    : "http://localhost:3001");
-
-type User = { id: string; email: string; name?: string | null };
+import { FormEvent, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import Link from "next/link";
 
 type Props = {
   auctionId: string;
   minAmount: number;
-  users: User[];
-  disabled?: boolean; // <— NEW
+  disabled?: boolean;
+  isAuthed?: boolean;
 };
 
-export default function BidForm({ auctionId, minAmount, users, disabled }: Props) {
-  const router = useRouter();
+export default function BidForm({
+  auctionId,
+  minAmount,
+  disabled,
+  isAuthed,
+}: Props) {
   const [amount, setAmount] = useState<number>(minAmount);
-  const [userId, setUserId] = useState<string>(users[0]?.id ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (disabled) return;
+    setErr(null);
+    setOk(false);
+
+    if (!isAuthed) {
+      setErr("Musisz być zalogowany, aby licytować.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/bids`, {
+      const res = await apiFetch("/bids", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Number(amount), userId, auctionId }),
+        body: JSON.stringify({ auctionId, amount }),
       });
-
       if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const data = await res.json();
-          msg =
-            (typeof data?.message === "string"
-              ? data.message
-              : Array.isArray(data?.message)
-              ? data.message.join(", ")
-              : msg) ?? msg;
-          if (data?.code) msg = `${data.code}: ${msg}`;
-        } catch {}
-        alert(`Błąd: ${msg}`);
-      } else {
-        router.refresh();
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || "Nie udało się złożyć oferty");
       }
-    } catch {
-      alert("Nie udało się złożyć oferty.");
+      setOk(true);
+      // opcjonalnie odśwież bieżącą stronę / stream:
+      window.dispatchEvent(
+        new CustomEvent("bid:created", { detail: { auctionId, amount } })
+      );
+    } catch (e: any) {
+      setErr(e?.message ?? "Błąd");
     } finally {
       setLoading(false);
-      setAmount(minAmount);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2 items-stretch">
-      <select
-        className="border rounded px-3 py-2 text-sm"
-        value={userId}
-        onChange={(e) => setUserId(e.target.value)}
-        required
-        aria-label="Użytkownik"
-        disabled={disabled || loading}
-        title={disabled ? "Licytacja niedostępna poza LIVE" : undefined}
-      >
-        {users.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.name ?? u.email}
-          </option>
-        ))}
-      </select>
+    <div>
+      {!isAuthed && (
+        <div className="mb-3 text-sm text-amber-300 bg-amber-900/30 border border-amber-800 rounded p-2">
+          Aby licytować,{" "}
+          <Link
+            href={`/login?next=/auction/${auctionId}`}
+            className="underline"
+          >
+            zaloguj się
+          </Link>
+          .
+        </div>
+      )}
 
-      <input
-        type="number"
-        className="border rounded px-3 py-2 text-sm w-full"
-        value={amount}
-        min={minAmount}
-        step={1}
-        onChange={(e) => setAmount(Number(e.target.value))}
-        placeholder={`min ${minAmount}`}
-        aria-label="Kwota"
-        required
-        disabled={disabled || loading}
-        title={disabled ? "Licytacja niedostępna poza LIVE" : undefined}
-      />
+      <form onSubmit={onSubmit} className="flex items-center gap-2">
+        <input
+          type="number"
+          min={minAmount}
+          step={100}
+          value={amount}
+          onChange={(e) => setAmount(Number(e.target.value))}
+          className="w-40 border border-neutral-700 rounded px-3 py-2 bg-neutral-900"
+          disabled={disabled || loading}
+        />
+        <button
+          type="submit"
+          disabled={disabled || loading}
+          className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-60"
+        >
+          {loading ? "Licytuję…" : "Zalicytuj"}
+        </button>
+      </form>
 
-      <button
-        type="submit"
-        disabled={disabled || loading}
-        title={disabled ? "Licytacja niedostępna poza LIVE" : undefined}
-        className="rounded bg-foreground text-background px-4 py-2 text-sm disabled:opacity-60"
-      >
-        {loading ? "Licytuję…" : "Licytuj"}
-      </button>
-    </form>
+      {err && <p className="mt-2 text-sm text-red-300">{err}</p>}
+      {ok && <p className="mt-2 text-sm text-emerald-300">Oferta złożona ✅</p>}
+      {disabled && (
+        <p className="mt-2 text-xs opacity-70">
+          Licytacja niedostępna (aukcja nie-LIVE).
+        </p>
+      )}
+    </div>
   );
 }
