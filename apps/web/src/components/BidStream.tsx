@@ -1,4 +1,3 @@
-// apps/web/src/components/BidStream.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -25,6 +24,7 @@ export default function BidStream({ auctionId }: { auctionId: string }) {
         reconnectionDelay: 500,
         reconnectionDelayMax: 5000,
         randomizationFactor: 0.5,
+        withCredentials: true, // jeśli kiedyś włączysz auth po cookie
       });
 
       socket.on("connect", () => {
@@ -35,10 +35,8 @@ export default function BidStream({ auctionId }: { auctionId: string }) {
       socket.on("auction.extended", () => router.refresh());
       socket.on("auction.status", () => router.refresh());
 
-      // opcjonalny heartbeat/logi
-      socket.on("connect_error", () => {
-        // tu można dodać toast/log
-      });
+      // opcjonalne logi/diagnostyka
+      socket.on("connect_error", () => {});
       socket.on("reconnect_attempt", () => {});
       socket.on("reconnect", () => {});
     }
@@ -51,5 +49,6 @@ export default function BidStream({ auctionId }: { auctionId: string }) {
     };
   }, [auctionId, router]);
 
+  // Ten komponent tylko „mostkuje” realtime → SSR refresh
   return null;
 }

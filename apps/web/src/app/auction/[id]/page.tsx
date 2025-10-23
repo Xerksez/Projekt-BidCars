@@ -4,11 +4,9 @@ import BidStream from "@/components/BidStream";
 import LiveStatus from "@/components/LiveStatus";
 import Image from "next/image";
 import PhotoDeleteButton from "@/components/PhotoDeleteButton";
-import { cookies } from "next/headers";
+import { apiFetchServer, getMeSSR, API } from "@/lib/api-server";
 
 export const dynamic = "force-dynamic";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 async function safeJson(res: Response) {
   try {
@@ -18,40 +16,28 @@ async function safeJson(res: Response) {
   }
 }
 
-type Me = { id: string; email: string; name?: string | null; role?: string };
-
-async function getMe(): Promise<Me | null> {
-  const cookieStore = await cookies();
-  const cookie = cookieStore.toString();
-  const res = await fetch(`${API}/auth/me`, {
-    headers: { Cookie: cookie },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
-
 async function getAuction(id: string) {
-  const res = await fetch(`${API}/auctions/${id}`, { cache: "no-store" });
+  const res = await apiFetchServer(`/auctions/${id}`);
   return { ok: res.ok, status: res.status, data: await safeJson(res) };
 }
 async function getBids(id: string) {
-  const res = await fetch(`${API}/bids/auction/${id}`, { cache: "no-store" });
+  const res = await apiFetchServer(`/bids/auction/${id}`);
   return { ok: res.ok, status: res.status, data: await safeJson(res) };
 }
 async function getUsers() {
-  const res = await fetch(`${API}/users`, { cache: "no-store" });
+  const res = await apiFetchServer(`/users`);
   return { ok: res.ok, status: res.status, data: await safeJson(res) };
 }
 async function getPhotos(id: string) {
-  const res = await fetch(`${API}/photos/auction/${id}`, { cache: "no-store" });
-  return res.json();
+  const res = await apiFetchServer(`/photos/auction/${id}`);
+  if (!res.ok) return [];
+  return (await res.json()) as any[];
 }
 
 export default async function AuctionPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string }; // ← NIE Promise
 }) {
   const { id } = await params;
 
@@ -60,7 +46,7 @@ export default async function AuctionPage({
     getBids(id),
     getUsers(),
     getPhotos(id),
-    getMe(),
+    getMeSSR(),
   ]);
 
   return (
@@ -75,7 +61,7 @@ export default async function AuctionPage({
       {auctionRes.ok && <BidStream auctionId={auctionRes.data.id} />}
 
       {!auctionRes.ok && (
-        <div className="rounded border border-red-400 bg-red-50 p-4 text-sm">
+        <div className="rounded border border-red-400 bg-red-50 p-4 text-sm text-red-800">
           <div className="font-semibold mb-1">Nie udało się pobrać aukcji</div>
           <div>
             <b>API:</b> {API}
@@ -137,7 +123,6 @@ function AuctionView({
   photos: any[];
   isAuthed: boolean;
 }) {
-  // Preferujemy status z backendu (computeStatus), a jak go brak – fallback na czas
   const now = Date.now();
   const startsAtMs = new Date(auction.startsAt).getTime();
   const endsAtMs = new Date(auction.endsAt).getTime();
@@ -157,9 +142,11 @@ function AuctionView({
         {photos?.length ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {photos.map((p: any) => {
+              const base =
+                process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
               const src = p?.url?.startsWith("http")
                 ? p.url
-                : `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}${p?.url ?? ""}`;
+                : `${base}${p?.url ?? ""}`;
 
               return (
                 <div
@@ -213,7 +200,7 @@ function AuctionView({
             auctionId={auction.id}
             minAmount={minAmount}
             isAuthed={isAuthed}
-            disabled={!isLive} /* <— NEW */
+            disabled={!isLive}
           />
         ) : (
           <p className="text-sm opacity-70">

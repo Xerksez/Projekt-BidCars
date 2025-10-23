@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { UpdateAuctionDto } from './dto/update-auction.dto';
 import type { ListAuctionsDto } from './dto/list-auctions.dto';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 type AuctionStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
 
@@ -26,27 +27,21 @@ function computeStatus(a: {
 
 @Injectable()
 export class AuctionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
+  ) {}
 
   async stats() {
     const now = new Date();
 
     const [total, cancelled, ended, live, scheduled] =
       await this.prisma.$transaction([
-        // wszystkie
         this.prisma.auction.count(),
-        // anulowane (osobno)
+        this.prisma.auction.count({ where: { status: 'CANCELLED' } }),
         this.prisma.auction.count({
-          where: { status: 'CANCELLED' },
+          where: { status: { not: 'CANCELLED' }, endsAt: { lte: now } },
         }),
-        // zakończone (bez anulowanych)
-        this.prisma.auction.count({
-          where: {
-            status: { not: 'CANCELLED' },
-            endsAt: { lte: now },
-          },
-        }),
-        // live (bez anulowanych)
         this.prisma.auction.count({
           where: {
             status: { not: 'CANCELLED' },
@@ -54,17 +49,12 @@ export class AuctionsService {
             endsAt: { gt: now },
           },
         }),
-        // scheduled/przyszłe (bez anulowanych)
         this.prisma.auction.count({
-          where: {
-            status: { not: 'CANCELLED' },
-            startsAt: { gt: now },
-          },
+          where: { status: { not: 'CANCELLED' }, startsAt: { gt: now } },
         }),
       ]);
 
     const active = live + scheduled;
-
     return { total, active, live, scheduled, ended, cancelled };
   }
 
@@ -76,7 +66,6 @@ export class AuctionsService {
     const where: Prisma.AuctionWhereInput = {};
     const now = new Date();
 
-    // ---- STATUS → CZAS ----
     if (q?.status) {
       switch (q.status) {
         case 'SCHEDULED':
@@ -90,21 +79,13 @@ export class AuctionsService {
           where.endsAt = { lte: now };
           break;
         case 'CANCELLED':
-          // tylko po kolumnie – anulacje ustawiasz ręcznie
           where.status = 'CANCELLED';
           break;
-        default:
-          // nieznany status – nic nie filtrujemy
-          break;
       }
-    } else {
-      // ---- WIDOK "AKTYWNE" (LIVE+SCHEDULED) ----
-      if (q?.excludeEnded === '1') {
-        where.endsAt = { gt: now };
-      }
+    } else if (q?.excludeEnded === '1') {
+      where.endsAt = { gt: now };
     }
 
-    // ---- SEARCH ----
     if (q?.search && q.search.trim()) {
       where.OR = [
         { title: { contains: q.search, mode: 'insensitive' } },
@@ -112,7 +93,6 @@ export class AuctionsService {
       ];
     }
 
-    // ---- SORT ----
     const sortField = (q?.sort ??
       'endsAt') as keyof Prisma.AuctionOrderByWithRelationInput;
     const sortOrder = (q?.order ?? 'asc') as Prisma.SortOrder;
@@ -141,7 +121,6 @@ export class AuctionsService {
           sourceId: true,
           sourceUrl: true,
           raw: true,
-          // ⬇️ ZMIEN NA WŁAŚCIWĄ NAZWĘ RELACJI (np. photos, auctionPhotos, auctionphoto)
           photos: {
             select: { url: true },
             orderBy: { createdAt: 'asc' },
@@ -155,11 +134,11 @@ export class AuctionsService {
     const items = rows.map((a) => ({
       ...a,
       status: computeStatus(a),
-      coverUrl: a.photos?.[0]?.url ?? null, // ⬅️ miniatura
+      coverUrl: a.photos?.[0]?.url ?? null,
     }));
 
     return {
-      items: items.map((a) => ({ ...a, status: computeStatus(a) })),
+      items,
       page,
       limit,
       total,
@@ -221,10 +200,53 @@ export class AuctionsService {
       data.endsAt = new Date(data.endsAt as string);
 
     try {
-      return await this.prisma.auction.update({ where: { id }, data });
+      const updated = await this.prisma.auction.update({ where: { id }, data });
+
+      // Jeśli zmieniono status — wyślij realtime do pokoju
+      type RTStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
+
+      if (typeof input.status === 'string') {
+        const status = updated.status as RTStatus;
+        this.realtime.emitAuctionStatus({
+          auctionId: id,
+          status,
+          startsAt: updated.startsAt,
+          endsAt: updated.endsAt,
+          currentPrice:
+            typeof updated.currentPrice === 'number'
+              ? updated.currentPrice
+              : undefined,
+        });
+      }
+
+      return updated;
     } catch {
       throw new NotFoundException('Auction not found');
     }
+  }
+
+  // (opcjonalnie) jawna zmiana statusu z realtime
+  async setStatus(
+    id: string,
+    status: 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED',
+  ) {
+    const updated = await this.prisma.auction.update({
+      where: { id },
+      data: { status },
+    });
+
+    this.realtime.emitAuctionStatus({
+      auctionId: id,
+      status: updated.status as 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED',
+      startsAt: updated.startsAt,
+      endsAt: updated.endsAt,
+      currentPrice:
+        typeof updated.currentPrice === 'number'
+          ? updated.currentPrice
+          : undefined,
+    });
+
+    return updated;
   }
 
   async remove(id: string) {

@@ -1,6 +1,13 @@
 import { PartialType } from '@nestjs/swagger';
 import { CreateAuctionDto } from './create-auction.dto';
-import { IsOptional, IsISO8601, IsInt, IsString, Min } from 'class-validator';
+import {
+  IsOptional,
+  IsISO8601,
+  IsInt,
+  IsString,
+  Min,
+  IsIn,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateAuctionDto extends PartialType(CreateAuctionDto) {
@@ -35,4 +42,8 @@ export class UpdateAuctionDto extends PartialType(CreateAuctionDto) {
   @IsInt()
   @Min(30)
   softCloseSec?: number;
+
+  @IsOptional()
+  @IsIn(['SCHEDULED', 'LIVE', 'ENDED', 'CANCELLED'])
+  status?: 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
 }

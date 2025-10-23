@@ -9,11 +9,16 @@ import type { Server, Socket } from 'socket.io';
 
 @WebSocketGateway({
   namespace: '/ws',
-  cors: { origin: true }, // dev: pozwól na localhost:3000
+  transports: ['websocket'], // stabilne WS (bez pollingu)
+  cors: {
+    origin: true, // dev: pozwól na http://localhost:3000
+    credentials: true, // jeżeli planujesz auth po cookie
+  },
 })
 export class RealtimeGateway {
   @WebSocketServer() server: Server;
 
+  // Klient dołącza do pokoju aukcji
   @SubscribeMessage('auction.join')
   handleJoin(
     @MessageBody() data: { auctionId: string },
@@ -27,19 +32,20 @@ export class RealtimeGateway {
     }
   }
 
-  emitAuctionExtended(payload: {
-    auctionId: string;
-    endsAt: string;
-    extendedBySec: number;
-  }) {
-    this.server
-      .to(this.room(payload.auctionId))
-      .emit('auction.extended', payload);
+  // (opcjonalnie) klient opuszcza pokój
+  @SubscribeMessage('auction.leave')
+  handleLeave(
+    @MessageBody() data: { auctionId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    if (data?.auctionId) {
+      client.leave(this.room(data.auctionId));
+      client.emit('auction.left', { ok: true, auctionId: data.auctionId });
+    }
   }
-  
-emitAuctionStatus(payload: { auctionId: string; status: 'UPCOMING' | 'LIVE' | 'ENDED' }) {
-  this.server.to(this.room(payload.auctionId)).emit('auction.status', payload);
-}
+
+  // --- Emity używane przez serwisy ---
+
   emitBidCreated(payload: {
     auctionId: string;
     bidId: string;
@@ -50,6 +56,29 @@ emitAuctionStatus(payload: { auctionId: string; status: 'UPCOMING' | 'LIVE' | 'E
     this.server.to(this.room(payload.auctionId)).emit('bid.created', payload);
   }
 
+  emitAuctionExtended(payload: {
+    auctionId: string;
+    endsAt: string;
+    extendedBySec: number;
+  }) {
+    this.server
+      .to(this.room(payload.auctionId))
+      .emit('auction.extended', payload);
+  }
+
+  emitAuctionStatus(payload: {
+    auctionId: string;
+    status: 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
+    startsAt?: string | Date;
+    endsAt?: string | Date;
+    currentPrice?: number;
+  }) {
+    this.server
+      .to(this.room(payload.auctionId))
+      .emit('auction.status', payload);
+  }
+
+  // --- Helpers ---
   private room(auctionId: string) {
     return `auction:${auctionId}`;
   }

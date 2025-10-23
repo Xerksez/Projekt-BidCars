@@ -1,33 +1,15 @@
-import { cookies } from "next/headers";
-import { API } from "@/lib/api";
-
-type Me = { id: string; email: string; name?: string | null; role?: string };
+import { apiFetchServer, Me } from "@/lib/api-server";
 
 async function getMe(): Promise<Me | null> {
-  // cookies() jest teraz async – trzeba await
-  const cookieStore = await cookies();
-
-  // Zbuduj poprawny header Cookie do requestu serwerowego
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join("; ");
-
-  const res = await fetch(`${API}/auth/me`, {
-    headers: { Cookie: cookieHeader },
-    // SSR, bez kejszowania:
-    cache: "no-store",
-    next: { revalidate: 0 },
-  });
-
+  const res = await apiFetchServer("/auth/me");
   if (!res.ok) return null;
   return (await res.json()) as Me;
 }
-console.log("[Account] server component rendered");
+
 export default async function AccountPage() {
   const me = await getMe();
+
   if (!me) {
-    // prosty redirect bez middleware
     return (
       <div className="mx-auto max-w-md p-6">
         <h1 className="text-2xl font-semibold mb-2">Moje konto</h1>
