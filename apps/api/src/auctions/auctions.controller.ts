@@ -25,14 +25,15 @@ export class AuctionsController {
   constructor(private readonly auctions: AuctionsService) {}
 
   // PUBLIC: lista z filtrami
+  // PUBLIC: lista z filtrami
   @Get()
-  list(@Query() q: ListAuctionsDto) {
+  list(@Query() q: ListAuctionsDto): Promise<unknown> {
     return this.auctions.list(q);
   }
 
   // PUBLIC: detal
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string): Promise<unknown> {
     return this.auctions.findOne(id);
   }
 
@@ -41,22 +42,25 @@ export class AuctionsController {
   @UseGuards(ApiKeyGuard)
   @ApiSecurity('x-api-key')
   create(@Body() dto: CreateAuctionDto) {
+    // tu możesz zostawić inferencję z Prisma
     return this.auctions.create(dto);
   }
 
   // ADMIN ONLY: update
   @Patch(':id')
   @UseGuards(ApiKeyGuard)
- @ApiSecurity('x-api-key')
+  @ApiSecurity('x-api-key')
   update(@Param('id') id: string, @Body() dto: UpdateAuctionDto) {
+    // też może zostać
     return this.auctions.update(id, dto);
   }
 
   // ADMIN ONLY: delete
   @Delete(':id')
   @UseGuards(ApiKeyGuard)
- @ApiSecurity('x-api-key')
+  @ApiSecurity('x-api-key')
   remove(@Param('id') id: string) {
+    // zwraca { ok: true }, może zostać
     return this.auctions.remove(id);
   }
 }

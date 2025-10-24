@@ -9,6 +9,36 @@ import { UpdateAuctionDto } from './dto/update-auction.dto';
 import type { ListAuctionsDto } from './dto/list-auctions.dto';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+interface JsonObject {
+  [key: string]: JsonValue;
+}
+type JsonArray = JsonValue[];
+
+/** Rekurencyjna konwersja BigInt -> number w całym drzewie obiektu */
+function convertBigIntDeep(val: unknown): JsonValue {
+  if (typeof val === 'bigint') return Number(val);
+  if (val === null) return null;
+  if (Array.isArray(val)) return val.map((v) => convertBigIntDeep(v));
+  if (typeof val === 'object') {
+    const out: JsonObject = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      out[k] = convertBigIntDeep(v);
+    }
+    return out;
+  }
+  // liczby / stringi / bool
+  if (
+    typeof val === 'string' ||
+    typeof val === 'number' ||
+    typeof val === 'boolean'
+  ) {
+    return val;
+  }
+  // wszystko inne (np. undefined) nie jest legalnym JSON — zamieńmy na null
+  return null;
+}
 type AuctionStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
 
 function computeStatus(a: {
@@ -106,21 +136,8 @@ export class AuctionsService {
         orderBy,
         skip,
         take: limit,
-        select: {
-          id: true,
-          title: true,
-          vin: true,
-          startsAt: true,
-          endsAt: true,
-          currentPrice: true,
-          softCloseSec: true,
-          createdAt: true,
-          updatedAt: true,
-          status: true,
-          source: true,
-          sourceId: true,
-          sourceUrl: true,
-          raw: true,
+        // UŻYWAMY include (nie select), by mieć relację photos w typach:
+        include: {
           photos: {
             select: { url: true },
             orderBy: { createdAt: 'asc' },
@@ -137,19 +154,19 @@ export class AuctionsService {
       coverUrl: a.photos?.[0]?.url ?? null,
     }));
 
-    return {
+    return convertBigIntDeep({
       items,
       page,
       limit,
       total,
       pages: Math.ceil(total / limit),
-    };
+    });
   }
 
   async findOne(id: string) {
     const auction = await this.prisma.auction.findUnique({ where: { id } });
     if (!auction) throw new NotFoundException('Auction not found');
-    return { ...auction, status: computeStatus(auction) };
+    return convertBigIntDeep({ ...auction, status: computeStatus(auction) });
   }
 
   create(input: {
@@ -158,16 +175,8 @@ export class AuctionsService {
     startsAt: string;
     endsAt: string;
     currentPrice?: number;
-    softCloseSec?: number;
   }) {
-    const {
-      title,
-      vin,
-      startsAt,
-      endsAt,
-      currentPrice = 0,
-      softCloseSec = 120,
-    } = input;
+    const { title, vin, startsAt, endsAt, currentPrice = 0 } = input;
 
     return this.prisma.auction
       .create({
@@ -177,7 +186,6 @@ export class AuctionsService {
           startsAt: new Date(startsAt),
           endsAt: new Date(endsAt),
           currentPrice,
-          softCloseSec,
         },
       })
       .catch((e: unknown) => {
@@ -202,9 +210,8 @@ export class AuctionsService {
     try {
       const updated = await this.prisma.auction.update({ where: { id }, data });
 
-      // Jeśli zmieniono status — wyślij realtime do pokoju
+      // realtime przy zmianie statusu
       type RTStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
-
       if (typeof input.status === 'string') {
         const status = updated.status as RTStatus;
         this.realtime.emitAuctionStatus({
@@ -225,7 +232,6 @@ export class AuctionsService {
     }
   }
 
-  // (opcjonalnie) jawna zmiana statusu z realtime
   async setStatus(
     id: string,
     status: 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED',

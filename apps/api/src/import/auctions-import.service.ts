@@ -17,6 +17,31 @@ type ImportOpts = {
 
 type ActiveLotsQuery = Query;
 
+// ——— Vendor shapes (typujemy to, co realnie używamy) ———
+type VendorActiveBid = {
+  id?: number;
+  auction?: number;
+  sale_date?: string | number; // bywa string "1759..." albo number
+  all_lots_id?: number;
+  bid_updated?: number;
+  current_bid?: number;
+  date_updated?: number;
+};
+
+type VendorCurrency = {
+  id?: number;
+  name?: string;
+  code_id?: number;
+  iso_code?: number;
+  char_code?: string; // ← bierzemy to na currencyCode
+};
+
+type VendorCarPhoto = {
+  id?: number | null;
+  photo?: string[];
+  all_lots_id?: number;
+};
+
 type VendorActiveLot = {
   id?: string | number;
   lot_number?: string | number;
@@ -27,8 +52,11 @@ type VendorActiveLot = {
   vin_number?: string;
   current_bid?: number;
   price?: number;
+
   photos?: string[];
   images?: string[];
+  car_photo?: VendorCarPhoto;
+
   sale_date?: string;
   url?: string;
   source_url?: string;
@@ -36,6 +64,31 @@ type VendorActiveLot = {
   endsAt?: string;
   auction_date_from?: string;
   auction_date_to?: string;
+
+  fuel?: string;
+  color?: string;
+  drive?: string;
+  series?: string | null;
+  engine_type?: string;
+  transmission?: string;
+  cylinders?: string | number;
+  body_style?: string;
+  vehicle_type?: string;
+  odometer?: number;
+  car_keys?: string | 'yes' | 'no';
+
+  location?: string;
+  auction_name?: string;
+
+  highlights?: string | null;
+  primary_damage?: string;
+  secondary_damage?: string;
+
+  est_retail_value?: number;
+  currency?: VendorCurrency;
+
+  active_bidding?: VendorActiveBid[];
+
   status?: RTStatus | string;
   title?: unknown;
   [key: string]: unknown;
@@ -51,7 +104,6 @@ type MappedAuction = {
   startsAt: Date;
   endsAt: Date;
   currentPrice?: number;
-  softCloseSec?: number;
   status: RTStatus;
   sourceId?: string | null;
   sourceUrl?: string | null;
@@ -65,6 +117,7 @@ type DryRunItem = {
   mapped: MappedAuction;
   rawSampleKey: string | number | null;
 };
+
 type PersistItem = { id: string; vin: string | null; sourceId: string | null };
 
 @Injectable()
@@ -88,7 +141,6 @@ export class AuctionsImportService {
     const per_page = Math.max(1, paging.perPage ?? 50);
     const maxPages = Math.max(1, paging.maxPages ?? 5);
 
-    // Gdy mock+dryRun: będziemy symulować strony lokalnie na bazie mocka
     const useMock = !!opts.mock;
     const dryRun = !!opts.dryRun;
 
@@ -107,7 +159,6 @@ export class AuctionsImportService {
 
       let arr: VendorActiveLot[] = [];
       if (Array.isArray(mockUnknown)) {
-        // przypadek: plik to bezpośrednio tablica rekordów
         arr = mockUnknown as VendorActiveLot[];
       } else if (
         typeof mockUnknown === 'object' &&
@@ -119,7 +170,6 @@ export class AuctionsImportService {
           arr = data as VendorActiveLot[];
         }
       }
-
       mockItems = arr;
     }
 
@@ -127,21 +177,17 @@ export class AuctionsImportService {
       const q = { ...baseQuery, page, per_page };
 
       if (useMock) {
-        // lokalna paginacja mocka
         const from = (page - 1) * per_page;
         const to = from + per_page;
         const pageSlice = (mockItems ?? []).slice(from, to);
 
         if (dryRun) {
-          // pokaż tylko statystyki — bez zapisu
           perPageResults.push({ page, count: pageSlice.length, saved: 0 });
         } else {
-          // persist na bazie mocka
           const res = await this.importActiveLots(q, {
             ...opts,
             dryRun: false,
             mock: true,
-            // persist bierze się z opts.persist (domyślnie true)
           });
           if (res.dryRun) {
             perPageResults.push({
@@ -156,15 +202,13 @@ export class AuctionsImportService {
         }
 
         totalFetched += pageSlice.length;
-        if (pageSlice.length < per_page) break; // koniec danych mocka
+        if (pageSlice.length < per_page) break;
         continue;
       }
 
       // REAL: jedziemy stronami
       if (dryRun) {
-        // nie wywołujemy vendora — tylko plan + 0 zapisów
         perPageResults.push({ page, count: 0, saved: 0 });
-        // możesz tu ewentualnie logować plan.url
       } else {
         const res = await this.importActiveLots(q, {
           ...opts,
@@ -181,7 +225,7 @@ export class AuctionsImportService {
           perPageResults.push({ page, count: res.count, saved: res.saved });
           totalFetched += res.count;
           totalSaved += res.saved;
-          if (res.count < per_page) break; // ostatnia strona
+          if (res.count < per_page) break;
         }
       }
     }
@@ -201,13 +245,9 @@ export class AuctionsImportService {
   /** Czytanie mocka, odporne na różne CWD i build (dist). */
   private async loadMock(filename: string): Promise<unknown> {
     const candidates = [
-      // dev (ts-node) – __dirname zwykle .../src/import
       resolve(__dirname, 'mocks', filename),
-      // monorepo – uruchamianie z root
       resolve(process.cwd(), 'apps', 'api', 'src', 'import', 'mocks', filename),
-      // uruchamianie z apps/api jako CWD
       resolve(process.cwd(), 'src', 'import', 'mocks', filename),
-      // prod build – dist
       resolve(process.cwd(), 'dist', 'import', 'mocks', filename),
     ];
 
@@ -234,7 +274,7 @@ export class AuctionsImportService {
         plan: { url: string; method: 'POST'; query: Record<string, unknown> };
         hint: string;
         items?: DryRunItem[];
-        vendorRawPreview?: string; // ← DODANE
+        vendorRawPreview?: string;
       }
     | { dryRun: false; count: number; saved: number; items: PersistItem[] }
   > {
@@ -275,15 +315,6 @@ export class AuctionsImportService {
 
     const items = this.extractItems(apiRes);
 
-    if (!dryRun && !useMock && !persist && items.length === 0) {
-      const plan = this.vendor.planActiveLots(q);
-      return {
-        dryRun: true,
-        plan: { url: plan.url, method: plan.method, query: plan.query },
-        hint: 'Fetched real vendor response, but no items parsed. See vendorRawPreview.',
-        vendorRawPreview: JSON.stringify(apiRes)?.slice(0, 3000),
-      };
-    }
     if (!persist) {
       const plan = this.vendor.planActiveLots(q);
       const preview: DryRunItem[] = items.slice(0, 10).map((raw) => ({
@@ -305,58 +336,186 @@ export class AuctionsImportService {
     for (const raw of items) {
       const mapped = this.mapVendorItemToAuction(raw);
 
+      // ——— Vehicle upsert ———
       let vehicleId: string | undefined = undefined;
       if (mapped.vin) {
+        const cylindersNum =
+          typeof raw?.cylinders === 'number'
+            ? raw.cylinders
+            : typeof raw?.cylinders === 'string'
+              ? Number(raw.cylinders) || undefined
+              : undefined;
+
+        const keysPresent =
+          typeof raw?.car_keys === 'string'
+            ? raw.car_keys.toLowerCase() === 'yes'
+            : undefined;
+
         const vehicle = await this.prisma.vehicle.upsert({
           where: { vin: mapped.vin },
           update: {
             make: mapped.make ?? undefined,
             model: mapped.model ?? undefined,
             year: typeof mapped.year === 'number' ? mapped.year : undefined,
+            bodyStyle:
+              typeof raw?.body_style === 'string' ? raw.body_style : undefined,
+            fuel: typeof raw?.fuel === 'string' ? raw.fuel : undefined,
+            engineType:
+              typeof raw?.engine_type === 'string'
+                ? raw.engine_type
+                : undefined,
+            cylinders: cylindersNum,
+            drive: typeof raw?.drive === 'string' ? raw.drive : undefined,
+            transmission:
+              typeof raw?.transmission === 'string'
+                ? raw.transmission
+                : undefined,
+            color: typeof raw?.color === 'string' ? raw.color : undefined,
+            vehicleType:
+              typeof raw?.vehicle_type === 'string'
+                ? raw.vehicle_type
+                : undefined,
+            series: typeof raw?.series === 'string' ? raw.series : undefined,
+            odometer:
+              typeof raw?.odometer === 'number' ? raw.odometer : undefined,
+            keysPresent: keysPresent,
           },
           create: {
             vin: mapped.vin,
             make: mapped.make ?? undefined,
             model: mapped.model ?? undefined,
             year: typeof mapped.year === 'number' ? mapped.year : undefined,
+            bodyStyle:
+              typeof raw?.body_style === 'string' ? raw.body_style : undefined,
+            fuel: typeof raw?.fuel === 'string' ? raw.fuel : undefined,
+            engineType:
+              typeof raw?.engine_type === 'string'
+                ? raw.engine_type
+                : undefined,
+            cylinders: cylindersNum,
+            drive: typeof raw?.drive === 'string' ? raw.drive : undefined,
+            transmission:
+              typeof raw?.transmission === 'string'
+                ? raw.transmission
+                : undefined,
+            color: typeof raw?.color === 'string' ? raw.color : undefined,
+            vehicleType:
+              typeof raw?.vehicle_type === 'string'
+                ? raw.vehicle_type
+                : undefined,
+            series: typeof raw?.series === 'string' ? raw.series : undefined,
+            odometer:
+              typeof raw?.odometer === 'number' ? raw.odometer : undefined,
+            keysPresent: keysPresent,
           },
         });
         vehicleId = vehicle.id;
       }
 
+      // ——— Auction attributes z vendora ———
+      const auctionHouse =
+        typeof raw?.auction_name === 'string' ? raw.auction_name : null;
+      const location = typeof raw?.location === 'string' ? raw.location : null;
+
+      const lotNumber =
+        typeof raw?.lot_number === 'number'
+          ? raw.lot_number
+          : typeof raw?.lot_number === 'string'
+            ? Number(raw.lot_number) || null
+            : null;
+
+      const estRetailValue =
+        typeof raw?.est_retail_value === 'number' ? raw.est_retail_value : null;
+
+      const primaryDamage =
+        typeof raw?.primary_damage === 'string' ? raw.primary_damage : null;
+
+      const secondaryDamage =
+        typeof raw?.secondary_damage === 'string' ? raw.secondary_damage : null;
+
+      const currencyCode =
+        typeof raw?.currency?.char_code === 'string'
+          ? raw.currency.char_code
+          : null;
+
+      const vendorCurrentBid =
+        Array.isArray(raw?.active_bidding) && raw.active_bidding.length
+          ? Number(raw.active_bidding[0]?.current_bid ?? 0) || 0
+          : typeof raw?.current_bid === 'number'
+            ? raw.current_bid
+            : 0;
+
+      const saleDateTs: bigint | null =
+        Array.isArray(raw?.active_bidding) && raw.active_bidding.length
+          ? raw.active_bidding[0]?.sale_date != null
+            ? BigInt(String(raw.active_bidding[0]?.sale_date))
+            : null
+          : typeof raw?.sale_date === 'string'
+            ? (BigInt(raw.sale_date) as bigint)
+            : null;
+
+      // ——— Photo list: vendor + mapped ———
+      const vendorPhotos = Array.isArray(raw?.car_photo?.photo)
+        ? (raw.car_photo.photo as string[])
+        : [];
+
+      const allPhotos = Array.from(
+        new Set([...(mapped.photos ?? []), ...vendorPhotos]),
+      );
+
+      // ——— Auction upsert ———
       const up = await this.prisma.auction.upsert({
         where: { source_sourceId: { source, sourceId: mapped.sourceId ?? '' } },
         update: {
           title: mapped.title,
           vin: mapped.vin ?? null,
-          vehicleId, // ← powiązanie z pojazdem
+          vehicleId,
           startsAt: mapped.startsAt,
           endsAt: mapped.endsAt,
           currentPrice: mapped.currentPrice ?? 0,
-          softCloseSec: mapped.softCloseSec ?? 120,
           status: mapped.status as RTStatus,
           sourceUrl: mapped.sourceUrl ?? null,
+          // nowe kolumny
+          auctionHouse,
+          location,
+          lotNumber,
+          estRetailValue,
+          primaryDamage,
+          secondaryDamage,
+          currencyCode,
+          vendorCurrentBid,
+          saleDateTs,
           raw: raw as unknown as object,
         },
         create: {
           title: mapped.title,
           vin: mapped.vin ?? null,
-          vehicleId, // ← powiązanie z pojazdem
+          vehicleId,
           startsAt: mapped.startsAt,
           endsAt: mapped.endsAt,
           currentPrice: mapped.currentPrice ?? 0,
-          softCloseSec: mapped.softCloseSec ?? 120,
           status: mapped.status as RTStatus,
           source,
           sourceId: mapped.sourceId ?? null,
           sourceUrl: mapped.sourceUrl ?? null,
+          // nowe kolumny
+          auctionHouse,
+          location,
+          lotNumber,
+          estRetailValue,
+          primaryDamage,
+          secondaryDamage,
+          currencyCode,
+          vendorCurrentBid,
+          saleDateTs,
           raw: raw as unknown as object,
         },
       });
 
-      if (Array.isArray(mapped.photos) && mapped.photos.length) {
-        for (let i = 0; i < mapped.photos.length; i++) {
-          const url = mapped.photos[i];
+      // ——— photos upsert ———
+      if (allPhotos.length) {
+        for (let i = 0; i < allPhotos.length; i++) {
+          const url = allPhotos[i];
           try {
             await this.prisma.auctionPhoto.upsert({
               where: { auctionId_url: { auctionId: up.id, url } },
@@ -366,6 +525,25 @@ export class AuctionsImportService {
           } catch {
             /* ignore single photo errors */
           }
+        }
+      }
+
+      // ——— snapshoty active_bidding ———
+      if (Array.isArray(raw?.active_bidding)) {
+        for (const ab of raw.active_bidding) {
+          await this.prisma.auctionActiveBid.create({
+            data: {
+              auctionId: up.id,
+              saleDateTs:
+                ab?.sale_date != null ? BigInt(String(ab.sale_date)) : null,
+              currentBid:
+                typeof ab?.current_bid === 'number' ? ab.current_bid : null,
+              bidUpdated:
+                typeof ab?.bid_updated === 'number' ? ab.bid_updated : null,
+              dateUpdated:
+                typeof ab?.date_updated === 'number' ? ab.date_updated : null,
+            },
+          });
         }
       }
 
@@ -408,22 +586,20 @@ export class AuctionsImportService {
   // ----------------- helpers -----------------
 
   private extractItems(apiRes: unknown): VendorActiveLot[] {
-    // 1) czysta tablica
     if (Array.isArray(apiRes)) return apiRes as VendorActiveLot[];
 
-    // 2) typowe kształty { data: [...] } / { data: { data: [...] } }
     const anyRes = apiRes as Record<string, unknown> | null;
     if (!anyRes || typeof anyRes !== 'object') return [];
 
     const tryPaths: Array<string[]> = [
-      ['data'], // { data: [...] }
-      ['data', 'data'], // { data: { data: [...] } }
-      ['items'], // { items: [...] }
-      ['result'], // { result: [...] }
-      ['response', 'items'], // { response: { items: [...] } }
-      ['payload', 'items'], // { payload: { items: [...] } }
-      ['cars'], // { cars: [...] }
-      ['lots'], // { lots: [...] }
+      ['data'],
+      ['data', 'data'],
+      ['items'],
+      ['result'],
+      ['response', 'items'],
+      ['payload', 'items'],
+      ['cars'],
+      ['lots'],
     ];
 
     for (const path of tryPaths) {
@@ -527,7 +703,6 @@ export class AuctionsImportService {
       startsAt,
       endsAt,
       currentPrice,
-      softCloseSec: 120,
       status,
       sourceId,
       sourceUrl,

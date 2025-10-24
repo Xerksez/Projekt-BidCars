@@ -19,53 +19,98 @@ model User {
 
   bids      Bid[]  @relation("UserBids") 
 }
+model AuctionActiveBid {
+  id          String   @id @default(cuid())
+  auctionId   String
+  auction     Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
 
+  saleDateTs  BigInt?  @map("sale_date_ts")  // "1759320000000" → BigInt
+  currentBid  Int?
+  bidUpdated  Int?
+  dateUpdated Int?
+
+  createdAt   DateTime @default(now())
+
+  @@index([auctionId, createdAt])
+}
 model Vehicle {
   id           String   @id @default(cuid())
   vin          String   @unique
   make         String?
   model        String?
   year         Int?
-  bodyClass    String?
-  vehicleType  String?
+
+  bodyStyle    String?  @map("body_style")
+  fuel         String?
+  engineType   String?  @map("engine_type")
+  cylinders    Int?
+  drive        String?
+  transmission String?
+  color        String?
+  vehicleType  String?  @map("vehicle_type")
+  series       String?
   odometer     Int?
+  keysPresent  Boolean? @map("keys_present")
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt @default(now())  // ← DODANE @default(now())
 
   auctions     Auction[]
+  @@index([make, model])
+  @@index([year])
 }
-
 model Auction {
-  id           String         @id @default(cuid())
+  id           String        @id @default(cuid())
   title        String
-  // ✅ vin już NIE jest unique (możesz go chwilowo zostawić, patrz migracja)
   vin          String?
-  vehicleId    String?
-  vehicle      Vehicle?       @relation(fields: [vehicleId], references: [id])
-
   startsAt     DateTime
   endsAt       DateTime
-  softCloseSec Int            @default(120)
-  currentPrice Int            @default(0)
-  status       AuctionStatus  @default(SCHEDULED)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  currentPrice Int           @default(0)
+  status       AuctionStatus @default(SCHEDULED)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  source       String    @default("MANUAL")
-  sourceId     String?
-  sourceUrl    String?
-  raw          Json?
+  // źródło
+  source    String   @default("MANUAL")
+  sourceId  String?
+  sourceUrl String?
+  raw       Json?
 
-  photos       AuctionPhoto[]
-  bids         Bid[]
+  // link do pojazdu
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
 
-  @@unique([source, sourceId], name: "source_sourceId")
+  // atrybuty aukcyjne
+  auctionHouse     String?   @map("auction_house")
+  location         String?
+  lotNumber        Int?      @map("lot_number")
+  estRetailValue   Int?      @map("est_retail_value")
+  primaryDamage    String?
+  secondaryDamage  String?
+  currencyCode     String?   @map("currency_code")
+  buyNowPrice      Int?      @map("buy_now_price")
+  vendorCurrentBid Int?      @map("vendor_current_bid")
+  saleDateTs       BigInt?   @map("sale_date_ts")
+
+  photos     AuctionPhoto[]
+  bids       Bid[]
+  activeBids AuctionActiveBid[]
+
   @@index([status])
   @@index([endsAt])
-  @@index([startsAt])
-  @@index([createdAt])
+  @@index([auctionHouse])
+  @@index([location])
+  @@index([lotNumber])
+  @@index([estRetailValue])
+  @@index([primaryDamage])
+  @@index([secondaryDamage])
+  @@index([currencyCode])
   @@index([currentPrice])
-  // opcjonalnie:
+  @@unique([source, sourceId], name: "source_sourceId")
   @@index([vin])
+  @@index([vehicleId])
 }
+
 
 model AuctionPhoto {
   id        String   @id @default(cuid())

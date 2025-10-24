@@ -1,4 +1,3 @@
-// apps/api/src/bids/bids.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -24,7 +23,7 @@ export class BidsService {
       // 1) Walidacje bazowe
       const user = await tx.user.findUnique({
         where: { id: input.userId },
-        select: { id: true }, // minimalny select
+        select: { id: true },
       });
       if (!user) throw new NotFoundException('User not found');
 
@@ -36,12 +35,11 @@ export class BidsService {
           startsAt: true,
           endsAt: true,
           currentPrice: true,
-          softCloseSec: true,
         },
       });
       if (!auction) throw new NotFoundException('Auction not found');
 
-      // 2) Sprawdzenie fazy (preferuj status, fallback na czas)
+      // 2) Sprawdzenie fazy
       const now = new Date();
       const isLiveByStatus = auction.status === 'LIVE';
       const isLiveByTime = now >= auction.startsAt && now <= auction.endsAt;
@@ -54,7 +52,6 @@ export class BidsService {
         if (now > auction.endsAt) {
           throw new BadRequestException('Auction already ended');
         }
-        // gdy status ma inne wartości
         throw new BadRequestException('Auction is not live');
       }
 
@@ -74,7 +71,7 @@ export class BidsService {
           auctionId: input.auctionId,
         },
         include: {
-          user: { select: { id: true, email: true, name: true } }, // bez wrażliwych pól
+          user: { select: { id: true, email: true, name: true } },
         },
       });
 
@@ -84,27 +81,9 @@ export class BidsService {
         data: { currentPrice: input.amount },
       });
 
-      // 6) Soft-close (opcjonalne wydłużenie)
-      const soft = Number(auction.softCloseSec ?? 0);
-      if (soft > 0) {
-        const endsAt = new Date(auction.endsAt);
-        const remainingMs = endsAt.getTime() - now.getTime();
-        if (remainingMs <= soft * 1000) {
-          const newEndsAt = new Date(endsAt.getTime() + soft * 1000);
-          await tx.auction.update({
-            where: { id: input.auctionId },
-            data: { endsAt: newEndsAt },
-          });
+      // (usunięto mechanizm soft-close)
 
-          this.realtime.emitAuctionExtended?.({
-            auctionId: input.auctionId,
-            endsAt: newEndsAt.toISOString(),
-            extendedBySec: soft,
-          });
-        }
-      }
-
-      // 7) Real-time event
+      // 6) Real-time event
       this.realtime.emitBidCreated({
         auctionId: input.auctionId,
         bidId: bid.id,
@@ -117,7 +96,6 @@ export class BidsService {
         at: bid.createdAt,
       });
 
-      // 8) Zwróć bez wrażliwych pól
       return bid;
     });
   }
@@ -127,7 +105,7 @@ export class BidsService {
       where: { auctionId },
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { id: true, email: true, name: true } }, // selektywnie!
+        user: { select: { id: true, email: true, name: true } },
       },
     });
   }
