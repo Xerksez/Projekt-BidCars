@@ -5,6 +5,7 @@ import LiveStatus from "@/components/LiveStatus";
 import Image from "next/image";
 import PhotoDeleteButton from "@/components/PhotoDeleteButton";
 import { apiFetchServer, getMeSSR, API } from "@/lib/api-server";
+import PhotoUploader from "@/components/PhotoUploader";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ async function getPhotos(id: string) {
 export default async function AuctionPage({
   params,
 }: {
-  params: { id: string }; // ← NIE Promise
+  params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
 
@@ -48,6 +49,7 @@ export default async function AuctionPage({
     getPhotos(id),
     getMeSSR(),
   ]);
+  const isAdmin = me?.role === "ADMIN";
 
   return (
     <div className="mx-auto max-w-3xl p-6 space-y-6">
@@ -97,6 +99,7 @@ export default async function AuctionPage({
             users={usersRes.data ?? []}
             photos={photos ?? []}
             isAuthed={!!me}
+            isAdmin={isAdmin}
           />
         </>
       )}
@@ -114,6 +117,7 @@ function AuctionView({
   users,
   photos,
   isAuthed,
+  isAdmin,
 }: {
   auction: any;
   bidsOk: boolean;
@@ -122,6 +126,7 @@ function AuctionView({
   users: any[];
   photos: any[];
   isAuthed: boolean;
+  isAdmin: boolean;
 }) {
   const now = Date.now();
   const startsAtMs = new Date(auction.startsAt).getTime();
@@ -139,6 +144,11 @@ function AuctionView({
     <>
       <div className="rounded border p-4">
         <h2 className="font-semibold mb-3">Zdjęcia</h2>
+        {isAdmin && (
+          <div className="mb-4">
+            <PhotoUploader auctionId={auction.id} />
+          </div>
+        )}
         {photos?.length ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {photos.map((p: any) => {
@@ -159,6 +169,7 @@ function AuctionView({
                     fill
                     sizes="(max-width: 768px) 50vw, 33vw"
                     className="object-cover"
+                    unoptimized
                   />
                   <PhotoDeleteButton id={p.id} />
                 </div>

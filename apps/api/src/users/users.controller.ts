@@ -8,14 +8,11 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiHeader, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
-import { JwtAuthGuard } from '../auth/jwt.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { Role } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
+import { ApiKeyGuard } from 'src/auth/api-key.guard';
 
 @ApiTags('users')
 @Controller('users')
@@ -33,9 +30,13 @@ export class UsersController {
   }
 
   @Patch(':id/role')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @ApiBearerAuth('bearer')
-  @Roles(Role.ADMIN)
+  @UseGuards(ApiKeyGuard)
+  @ApiSecurity('x-api-key')
+  @ApiHeader({
+    name: 'x-api-key',
+    required: true,
+    description: 'Admin API key',
+  })
   async setRole(@Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
     return this.users.updateRole(id, dto.role);
   }

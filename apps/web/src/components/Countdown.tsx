@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from "react";
 
-type Phase = 'UPCOMING' | 'LIVE' | 'ENDED';
+type Phase = "SCHEDULED" | "LIVE" | "ENDED";
 
 type Props = {
   startsAt: string; // ISO
-  endsAt: string;   // ISO
+  endsAt: string; // ISO
   onEnd?: () => void;
   onPhaseChange?: (phase: Phase) => void; // ⬅️ NOWE
 };
@@ -17,11 +17,17 @@ function fmt(ms: number) {
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const ss = s % 60;
-  if (d > 0) return `${d}d ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${ss.toString().padStart(2,'0')}`;
-  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${ss.toString().padStart(2,'0')}`;
+  if (d > 0)
+    return `${d}d ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
 }
 
-export default function Countdown({ startsAt, endsAt, onEnd, onPhaseChange }: Props) {
+export default function Countdown({
+  startsAt,
+  endsAt,
+  onEnd,
+  onPhaseChange,
+}: Props) {
   const [now, setNow] = useState(Date.now());
   const start = useMemo(() => new Date(startsAt).getTime(), [startsAt]);
   const end = useMemo(() => new Date(endsAt).getTime(), [endsAt]);
@@ -30,7 +36,7 @@ export default function Countdown({ startsAt, endsAt, onEnd, onPhaseChange }: Pr
   const live = now >= start && now < end;
   const ended = now >= end;
 
-  const phase: Phase = ended ? 'ENDED' : live ? 'LIVE' : 'UPCOMING';
+  const phase: Phase = ended ? "ENDED" : live ? "LIVE" : "SCHEDULED";
   const prevPhase = useRef<Phase>(phase);
 
   useEffect(() => {
@@ -40,7 +46,7 @@ export default function Countdown({ startsAt, endsAt, onEnd, onPhaseChange }: Pr
 
   useEffect(() => {
     if (phase !== prevPhase.current) {
-      onPhaseChange?.(phase);        // ⬅️ trigger na zmianę fazy
+      onPhaseChange?.(phase); // ⬅️ trigger na zmianę fazy
       prevPhase.current = phase;
     }
   }, [phase, onPhaseChange]);

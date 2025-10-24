@@ -17,6 +17,7 @@ import { HttpModule } from '@nestjs/axios';
 import { VendorClient } from './import/vendor.client';
 import { AuctionsImportService } from './import/auctions-import.service';
 import { ImportController } from './import/import.controller';
+import { ImportScheduler } from './import/import.scheduler';
 
 @Module({
   imports: [
@@ -62,6 +63,6 @@ import { ImportController } from './import/import.controller';
     }),
   ],
   controllers: [AppController, ImportController],
-  providers: [AuctionsImportService,VendorClient],
+  providers: [AuctionsImportService,VendorClient,ImportScheduler],
 })
 export class AppModule {}

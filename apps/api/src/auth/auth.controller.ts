@@ -50,20 +50,25 @@ export class AuthController {
 
   @Post('login')
   async login(
-    @Body() body: LoginDto,
+    @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    this.logger.log(`login start email=${body.email}`);
-    const result = await this.auth.login(body.email, body.password);
-    res.cookie(COOKIE_NAME, result.token, {
+    // ⬇️ tu było: const { user, accessToken } = ...
+    const { user, token } = await this.auth.login(dto.email, dto.password);
+
+    // cookie dla frontu (bez zmian – tylko użyjemy 'token')
+    res.cookie('bidcars_token', token, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      secure: false,
       maxAge: 7 * 24 * 3600 * 1000,
-      path: '/',
     });
-    this.logger.log(`login ok uid=${result.user.id} cookie set`);
-    return { user: result.user };
+
+    // zwrotka dla Swaggera/Postmana (żeby mieć Bearer)
+    return {
+      access_token: token, // <-- ważne: klucz 'access_token' dla standardu
+      user, // np. { id, email, role, name }
+    };
   }
 
   @Post('logout')
@@ -75,7 +80,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-@ApiBearerAuth('bearer')
+  @ApiBearerAuth('bearer')
   me(@Req() req: Request) {
     // @ts-expect-error – dodane przez guard
     const uid = req.user?.sub;

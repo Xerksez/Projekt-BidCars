@@ -16,7 +16,6 @@ export class AuctionsStatusService {
   async recalcStatuses() {
     const now = new Date();
 
-    // 1) UPCOMING -> LIVE
     const toLive = await this.prisma.auction.findMany({
       where: {
         status: 'SCHEDULED',

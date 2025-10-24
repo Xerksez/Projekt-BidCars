@@ -74,6 +74,130 @@ export class AuctionsImportService {
     private readonly vendor: VendorClient,
   ) {}
 
+  async runPagedActiveLots(
+    baseQuery: Record<string, unknown>,
+    opts: {
+      dryRun?: boolean;
+      mock?: boolean;
+      persist?: boolean;
+      source?: string;
+    } = {},
+    paging: { startPage?: number; perPage?: number; maxPages?: number } = {},
+  ) {
+    const startPage = Math.max(1, paging.startPage ?? 1);
+    const per_page = Math.max(1, paging.perPage ?? 50);
+    const maxPages = Math.max(1, paging.maxPages ?? 5);
+
+    // Gdy mock+dryRun: będziemy symulować strony lokalnie na bazie mocka
+    const useMock = !!opts.mock;
+    const dryRun = !!opts.dryRun;
+
+    let totalFetched = 0;
+    let totalSaved = 0;
+    const perPageResults: Array<{
+      page: number;
+      count: number;
+      saved: number;
+    }> = [];
+
+    // Przy mocku: wczytaj raz całość i "paginuj" lokalnie
+    let mockItems: VendorActiveLot[] | null = null;
+    if (useMock) {
+      const mockUnknown = await this.loadMock('active-lots.sample.json');
+
+      let arr: VendorActiveLot[] = [];
+      if (Array.isArray(mockUnknown)) {
+        // przypadek: plik to bezpośrednio tablica rekordów
+        arr = mockUnknown as VendorActiveLot[];
+      } else if (
+        typeof mockUnknown === 'object' &&
+        mockUnknown !== null &&
+        'data' in mockUnknown
+      ) {
+        const data = (mockUnknown as { data?: unknown }).data;
+        if (Array.isArray(data)) {
+          arr = data as VendorActiveLot[];
+        }
+      }
+
+      mockItems = arr;
+    }
+
+    for (let page = startPage; page < startPage + maxPages; page++) {
+      const q = { ...baseQuery, page, per_page };
+
+      if (useMock) {
+        // lokalna paginacja mocka
+        const from = (page - 1) * per_page;
+        const to = from + per_page;
+        const pageSlice = (mockItems ?? []).slice(from, to);
+
+        if (dryRun) {
+          // pokaż tylko statystyki — bez zapisu
+          perPageResults.push({ page, count: pageSlice.length, saved: 0 });
+        } else {
+          // persist na bazie mocka
+          const res = await this.importActiveLots(q, {
+            ...opts,
+            dryRun: false,
+            mock: true,
+            // persist bierze się z opts.persist (domyślnie true)
+          });
+          if (res.dryRun) {
+            perPageResults.push({
+              page,
+              count: res.items?.length ?? 0,
+              saved: 0,
+            });
+          } else {
+            perPageResults.push({ page, count: res.count, saved: res.saved });
+            totalSaved += res.saved;
+          }
+        }
+
+        totalFetched += pageSlice.length;
+        if (pageSlice.length < per_page) break; // koniec danych mocka
+        continue;
+      }
+
+      // REAL: jedziemy stronami
+      if (dryRun) {
+        // nie wywołujemy vendora — tylko plan + 0 zapisów
+        perPageResults.push({ page, count: 0, saved: 0 });
+        // możesz tu ewentualnie logować plan.url
+      } else {
+        const res = await this.importActiveLots(q, {
+          ...opts,
+          dryRun: false,
+          mock: false,
+        });
+        if (res.dryRun) {
+          perPageResults.push({
+            page,
+            count: res.items?.length ?? 0,
+            saved: 0,
+          });
+        } else {
+          perPageResults.push({ page, count: res.count, saved: res.saved });
+          totalFetched += res.count;
+          totalSaved += res.saved;
+          if (res.count < per_page) break; // ostatnia strona
+        }
+      }
+    }
+
+    return {
+      dryRun,
+      mock: useMock,
+      startPage,
+      per_page,
+      maxPages,
+      totalFetched,
+      totalSaved,
+      pages: perPageResults,
+    };
+  }
+
   /** Czytanie mocka, odporne na różne CWD i build (dist). */
   private async loadMock(filename: string): Promise<unknown> {
     const candidates = [
