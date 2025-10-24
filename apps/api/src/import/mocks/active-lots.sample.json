@@ -1,0 +1,34 @@
+{
+  "data": [
+    {
+      "id": "LOT123",
+      "make": "BMW",
+      "model": "X3",
+      "year": 2019,
+      "vin": "5UXKR0C52G0P21189",
+      "current_bid": 8500,
+      "auction_date_from": "2025-10-20T12:00:00Z",
+      "auction_date_to": "2025-10-30T12:00:00Z",
+      "url": "https://vendor.example/lot/LOT123",
+      "photos": [
+        "https://images.example.com/LOT123/1.jpg",
+        "https://images.example.com/LOT123/2.jpg"
+      ],
+      "status": "LIVE"
+    },
+    {
+      "lot_number": 40365342,
+      "make": "Audi",
+      "model": "A4",
+      "year": 2018,
+      "vin_number": "WAUZZZF43JN012345",
+      "current_bid": 4200,
+      "sale_date": "2025-10-29T15:00:00Z",
+      "images": [
+        "https://images.example.com/40365342/a.jpg"
+      ],
+      "source_url": "https://vendor.example/lot/40365342"
+    }
+  ],
+  "meta": { "page": 1, "per_page": 2, "total": 2 }
+}

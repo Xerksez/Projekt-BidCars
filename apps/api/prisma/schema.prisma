@@ -20,10 +20,27 @@ model User {
   bids      Bid[]  @relation("UserBids") 
 }
 
+model Vehicle {
+  id           String   @id @default(cuid())
+  vin          String   @unique
+  make         String?
+  model        String?
+  year         Int?
+  bodyClass    String?
+  vehicleType  String?
+  odometer     Int?
+
+  auctions     Auction[]
+}
+
 model Auction {
   id           String         @id @default(cuid())
   title        String
-  vin          String?        @unique
+  // ✅ vin już NIE jest unique (możesz go chwilowo zostawić, patrz migracja)
+  vin          String?
+  vehicleId    String?
+  vehicle      Vehicle?       @relation(fields: [vehicleId], references: [id])
+
   startsAt     DateTime
   endsAt       DateTime
   softCloseSec Int            @default(120)
@@ -32,24 +49,21 @@ model Auction {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  // NEW: pochodzenie danych
-  source        String    @default("MANUAL") // np. MANUAL | MOCK | COPART | IAAI
-  sourceId      String?                // id rekordu u dostawcy
-  sourceUrl     String?                // deep link do aukcji u dostawcy
-  raw           Json?                  // surowy payload od dostawcy (na debug)
+  source       String    @default("MANUAL")
+  sourceId     String?
+  sourceUrl    String?
+  raw          Json?
 
-
-  photos       AuctionPhoto[]   
-
+  photos       AuctionPhoto[]
   bids         Bid[]
-  @@index([status]) // filtrowanie po statusie
-  @@index([endsAt]) // sam endsAt (np. bez statusu)
-  @@index([endsAt, status(sort: Asc)]) // status + sort po endsAt
-  @@index([startsAt])  // ewentualne zapytania po starcie
-  @@index([createdAt])             // sort: createdAt
-  @@index([currentPrice])          // sort: currentPrice
+
   @@unique([source, sourceId], name: "source_sourceId")
-  @@index([title])
+  @@index([status])
+  @@index([endsAt])
+  @@index([startsAt])
+  @@index([createdAt])
+  @@index([currentPrice])
+  // opcjonalnie:
   @@index([vin])
 }
 

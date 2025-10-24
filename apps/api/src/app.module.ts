@@ -6,8 +6,6 @@ import { UsersModule } from './users/users.module';
 import { BidsModule } from './bids/bids.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PhotosModule } from './photos/photos.module';
-import { ImportController } from './import/import.controller';
-import { AuctionsImportService } from './import/auctions-import.service';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { RedisModule } from './redis/redis.module';
@@ -15,7 +13,10 @@ import { HealthModule } from './health/health.module';
 import type { IncomingMessage } from 'http';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
-//import { VendorModule } from './vendor/vendor.module';
+import { HttpModule } from '@nestjs/axios';
+import { VendorClient } from './import/vendor.client';
+import { AuctionsImportService } from './import/auctions-import.service';
+import { ImportController } from './import/import.controller';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ConfigModule } from '@nestjs/config';
     HealthModule,
     PhotosModule,
     AuthModule,
+     HttpModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     LoggerModule.forRoot({
       pinoHttp: {
@@ -58,10 +60,8 @@ import { ConfigModule } from '@nestjs/config';
         },
       },
     }),
-
-    //VendorModule,
   ],
   controllers: [AppController, ImportController],
-  providers: [AuctionsImportService],
+  providers: [AuctionsImportService,VendorClient],
 })
 export class AppModule {}
