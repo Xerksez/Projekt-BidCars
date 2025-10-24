@@ -104,7 +104,6 @@ export class VendorClient {
 
     try {
       if (logEnabled) {
-        // eslint-disable-next-line no-console
         console.log('[VendorClient] POST', redacted);
       }
       const res = await fetch(url, { method: 'POST', signal: ac.signal });

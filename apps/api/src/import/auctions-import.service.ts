@@ -234,6 +234,7 @@ export class AuctionsImportService {
         plan: { url: string; method: 'POST'; query: Record<string, unknown> };
         hint: string;
         items?: DryRunItem[];
+        vendorRawPreview?: string; // ← DODANE
       }
     | { dryRun: false; count: number; saved: number; items: PersistItem[] }
   > {
@@ -274,6 +275,15 @@ export class AuctionsImportService {
 
     const items = this.extractItems(apiRes);
 
+    if (!dryRun && !useMock && !persist && items.length === 0) {
+      const plan = this.vendor.planActiveLots(q);
+      return {
+        dryRun: true,
+        plan: { url: plan.url, method: plan.method, query: plan.query },
+        hint: 'Fetched real vendor response, but no items parsed. See vendorRawPreview.',
+        vendorRawPreview: JSON.stringify(apiRes)?.slice(0, 3000),
+      };
+    }
     if (!persist) {
       const plan = this.vendor.planActiveLots(q);
       const preview: DryRunItem[] = items.slice(0, 10).map((raw) => ({
@@ -397,11 +407,42 @@ export class AuctionsImportService {
 
   // ----------------- helpers -----------------
 
-  private extractItems(apiRes: VendorListResponse): VendorActiveLot[] {
+  private extractItems(apiRes: unknown): VendorActiveLot[] {
+    // 1) czysta tablica
     if (Array.isArray(apiRes)) return apiRes as VendorActiveLot[];
-    if (Array.isArray((apiRes as { data?: VendorActiveLot[] })?.data)) {
-      return (apiRes as { data?: VendorActiveLot[] }).data as VendorActiveLot[];
+
+    // 2) typowe kształty { data: [...] } / { data: { data: [...] } }
+    const anyRes = apiRes as Record<string, unknown> | null;
+    if (!anyRes || typeof anyRes !== 'object') return [];
+
+    const tryPaths: Array<string[]> = [
+      ['data'], // { data: [...] }
+      ['data', 'data'], // { data: { data: [...] } }
+      ['items'], // { items: [...] }
+      ['result'], // { result: [...] }
+      ['response', 'items'], // { response: { items: [...] } }
+      ['payload', 'items'], // { payload: { items: [...] } }
+      ['cars'], // { cars: [...] }
+      ['lots'], // { lots: [...] }
+    ];
+
+    for (const path of tryPaths) {
+      let current: unknown = anyRes;
+      for (const k of path) {
+        if (
+          current &&
+          typeof current === 'object' &&
+          k in (current as Record<string, unknown>)
+        ) {
+          current = (current as Record<string, unknown>)[k];
+        } else {
+          current = undefined;
+          break;
+        }
+      }
+      if (Array.isArray(current)) return current as VendorActiveLot[];
     }
+
     return [];
   }
 
